@@ -1,11 +1,7 @@
-import Utilisateur from "./components/Utilisateur";
+import Home from "./client/components/Home";
 
 function App() {
-    return (
-        <>
-            <Utilisateur />
-        </>
-    );
+  return <Home />;
 }
 
 export default App;
