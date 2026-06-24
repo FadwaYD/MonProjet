@@ -1,212 +1,115 @@
-import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Badge, Card, Button, SearchBar, Avatar, Modal, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import React, { useMemo, useState } from "react";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import { IconUsers, IconBuilding, IconMail, IconCalendar, IconCart, IconFile, IconPlus } from "./components/Icons";
+
+const CUSTOMERS = [
+  { id: "CL-301", name: "Clinilab Sarl", type: "Clinique privée", email: "contact@clinilab.ma", since: "Jan. 2024", orders: 18, segment: "VIP" },
+  { id: "CL-302", name: "LabTech Maroc", type: "Laboratoire d'analyses", email: "achats@labtech.ma", since: "Mars 2024", orders: 11, segment: "VIP" },
+  { id: "CL-303", name: "BioMed Diagnostics", type: "Laboratoire d'analyses", email: "info@biomed-dx.ma", since: "Juin 2026", orders: 1, segment: "Nouveau" },
+  { id: "CL-304", name: "Clinique Al Amal", type: "Clinique privée", email: "direction@alamal-clinique.ma", since: "Fév. 2023", orders: 27, segment: "VIP" },
+  { id: "CL-305", name: "Institut Pasteur Casa", type: "Institut de recherche", email: "logistique@pasteur-casa.ma", since: "Mai 2026", orders: 2, segment: "Nouveau" },
+  { id: "CL-306", name: "Pharma Plus Distribution", type: "Distributeur", email: "commandes@pharmaplus.ma", since: "Sept. 2022", orders: 0, segment: "Inactif" },
+];
+
+const SEGMENTS = ["Tous", "VIP", "Nouveau", "Inactif"];
+const badgeMap = { VIP: "gl-badge-success", Nouveau: "gl-badge-info", Inactif: "gl-badge-neutral" };
 
 export default function Customers() {
-  const [customers] = useState(MOCK.customers);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("tous");
+  const [segment, setSegment] = useState("Tous");
   const [selected, setSelected] = useState(null);
 
-  const filtered = customers.filter((c) => {
-    const matchSearch =
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "tous" || c.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(
+    () => CUSTOMERS.filter((c) => segment === "Tous" || c.segment === segment),
+    [segment]
+  );
 
-  const vipCount = customers.filter((c) => c.status === "vip").length;
-  const activeCount = customers.filter((c) => c.status === "actif").length;
-  const totalRevenue = "69 449 MAD";
+  const sidebar = {
+    eyebrow: "Relation client",
+    title: "Clients",
+    description: "Segments de la clientèle B2B",
+    sections: [
+      {
+        title: "Segments",
+        items: SEGMENTS.map((s) => ({
+          key: s,
+          label: s === "Tous" ? "Tous les clients" : `Clients ${s.toLowerCase()}`,
+          icon: IconUsers,
+          count: s === "Tous" ? CUSTOMERS.length : CUSTOMERS.filter((c) => c.segment === s).length,
+          active: segment === s,
+          onClick: () => setSegment(s),
+        })),
+      },
+    ],
+    promo: {
+      title: "Rétention",
+      text: "4 clients VIP représentent 68% du chiffre d'affaires de ce trimestre.",
+    },
+  };
 
   return (
-    <AdminLayout title="Clients">
-      {/* Stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3,1fr)",
-          gap: 12,
-          marginBottom: "1rem",
-        }}
-      >
-        {[
-          { label: "Total clients", value: customers.length },
-          { label: "Clients actifs", value: activeCount },
-          { label: "Clients VIP", value: vipCount },
-        ].map((s) => (
-          <div className="stat-card" key={s.label}>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Clients</b></>}
+        title="Portefeuille clients"
+        description="Consultez les comptes clients et leur historique d'achats."
+        actions={<button className="gl-btn gl-btn-primary"><IconPlus width={15} height={15} /> Ajouter un client</button>}
+      />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        {filtered.map((c) => (
+          <div className="gl-card gl-card-pad" key={c.id} style={{ cursor: "pointer" }} onClick={() => setSelected(c)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div className="gl-name-cell">
+                <div className="gl-avatar">{c.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
+                <div>
+                  <div className="name">{c.name}</div>
+                  <div className="sub">{c.type}</div>
+                </div>
+              </div>
+              <span className={`gl-badge ${badgeMap[c.segment]}`}>{c.segment}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--gl-gray-100)", fontSize: 12.5 }}>
+              <span className="gl-cell-muted">Client depuis {c.since}</span>
+              <span style={{ fontWeight: 700 }}>{c.orders} commande(s)</span>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: "1rem",
-          flexWrap: "wrap",
-        }}
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected?.name}
+        subtitle={selected?.type}
+        size="md"
+        footer={
+          <>
+            <button className="gl-btn gl-btn-ghost" onClick={() => setSelected(null)}>Fermer</button>
+            <button className="gl-btn gl-btn-primary"><IconFile width={14} height={14} /> Créer un devis</button>
+          </>
+        }
       >
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Rechercher un client…"
-        />
-        <select
-          className="input"
-          style={{ width: "auto" }}
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="tous">Tous les statuts</option>
-          <option value="actif">Actif</option>
-          <option value="vip">VIP</option>
-          <option value="inactif">Inactif</option>
-        </select>
-      </div>
-
-      <Card>
-        {filtered.length === 0 ? (
-          <EmptyState icon="👥" message="Aucun client trouvé." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Email</th>
-                <th>Téléphone</th>
-                <th>Commandes</th>
-                <th>Total dépensé</th>
-                <th>Statut</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
-                      <Avatar name={c.name} size={32} />
-                      <div>
-                        <div style={{ fontWeight: 500 }}>{c.name}</div>
-                        <div
-                          style={{ fontSize: 11, color: "var(--color-text-hint)" }}
-                        >
-                          Depuis {c.joined}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ color: "var(--color-text-muted)" }}>
-                    {c.email}
-                  </td>
-                  <td style={{ color: "var(--color-text-muted)" }}>
-                    {c.phone}
-                  </td>
-                  <td>{c.orders}</td>
-                  <td style={{ fontWeight: 500 }}>{c.total}</td>
-                  <td>
-                    <Badge status={c.status} />
-                  </td>
-                  <td>
-                    <Button size="sm" onClick={() => setSelected(c)}>
-                      👁️ Voir
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {selected && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", gap: 12 }}>
+              <div className="gl-card gl-card-pad" style={{ flex: 1, boxShadow: "none", background: "var(--gl-gray-50)" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--gl-gray-600)", fontSize: 12 }}><IconMail width={14} height={14} /> Email</div>
+                <div style={{ fontWeight: 700, marginTop: 4, fontSize: 13.5 }}>{selected.email}</div>
+              </div>
+              <div className="gl-card gl-card-pad" style={{ flex: 1, boxShadow: "none", background: "var(--gl-gray-50)" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--gl-gray-600)", fontSize: 12 }}><IconCalendar width={14} height={14} /> Client depuis</div>
+                <div style={{ fontWeight: 700, marginTop: 4, fontSize: 13.5 }}>{selected.since}</div>
+              </div>
+            </div>
+            <div className="gl-card gl-card-pad" style={{ boxShadow: "none", background: "var(--gl-gray-50)" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--gl-gray-600)", fontSize: 12 }}><IconCart width={14} height={14} /> Activité</div>
+              <div style={{ fontWeight: 700, marginTop: 4, fontSize: 13.5 }}>{selected.orders} commande(s) passées au total</div>
+            </div>
+          </div>
         )}
-      </Card>
-
-      {/* Customer detail modal */}
-      {selected && (
-        <Modal
-          title="Fiche client"
-          onClose={() => setSelected(null)}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              marginBottom: "1.25rem",
-              paddingBottom: "1rem",
-              borderBottom: "0.5px solid var(--color-border)",
-            }}
-          >
-            <Avatar name={selected.name} size={48} />
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 15 }}>
-                {selected.name}
-              </div>
-              <div
-                style={{ fontSize: 12, color: "var(--color-text-muted)", marginTop: 2 }}
-              >
-                Client depuis {selected.joined}
-              </div>
-            </div>
-            <Badge status={selected.status} />
-          </div>
-
-          {[
-            ["Email", selected.email],
-            ["Téléphone", selected.phone],
-            ["Nombre de commandes", selected.orders],
-            ["Total dépensé", selected.total],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "9px 0",
-                borderBottom: "0.5px solid var(--color-border)",
-                fontSize: 13,
-              }}
-            >
-              <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-              <span style={{ fontWeight: 500 }}>{value}</span>
-            </div>
-          ))}
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              marginTop: "1.25rem",
-            }}
-          >
-            <Button
-              style={{ flex: 1, justifyContent: "center" }}
-              onClick={() => setSelected(null)}
-            >
-              ✉️ Envoyer un message
-            </Button>
-            <Button
-              variant="primary"
-              style={{ flex: 1, justifyContent: "center" }}
-              onClick={() => setSelected(null)}
-            >
-              📦 Voir commandes
-            </Button>
-          </div>
-        </Modal>
-      )}
+      </Modal>
     </AdminLayout>
   );
 }

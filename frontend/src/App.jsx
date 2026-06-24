@@ -1,7 +1,5 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
 import Home from "./client/components/Home";
+
 import AdminDashboard from "./admin/Dashboard";
 import AdminProducts from "./admin/Products";
 import AdminCategories from "./admin/Categories";
@@ -12,7 +10,9 @@ import AdminMessages from "./admin/Messages";
 import AdminReports from "./admin/Reports";
 import AccountValidations from "./admin/AccountValidations";
 
-export default function App() {
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+function App() {
   return (
     <BrowserRouter>
       <Routes>
@@ -29,9 +29,11 @@ export default function App() {
         <Route path="/admin/rapports" element={<AdminReports />} />
         <Route path="/admin/validations" element={<AccountValidations />} />
 
-        {/* Fallback */}
+        {/* fallback route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
+
+export default App;

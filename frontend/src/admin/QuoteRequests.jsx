@@ -1,181 +1,144 @@
-import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Badge, Card, Button, SearchBar, Modal, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import React, { useMemo, useState } from "react";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import { IconFile, IconClock, IconCheck, IconX, IconDownload, IconBuilding, IconCalendar } from "./components/Icons";
+
+const QUOTES = [
+  { id: "DV-2031", client: "Clinilab Sarl", product: "Verrerie de précision (lot)", amount: "4 200 MAD", date: "24 juin 2026", status: "En attente" },
+  { id: "DV-2030", client: "LabTech Maroc", product: "Centrifugeuse CF-300", amount: "18 400 MAD", date: "23 juin 2026", status: "Validé" },
+  { id: "DV-2029", client: "BioMed Diagnostics", product: "Kit réactifs immuno x10", amount: "12 500 MAD", date: "21 juin 2026", status: "En attente" },
+  { id: "DV-2028", client: "Clinique Al Amal", product: "Lit médicalisé électrique x2", amount: "19 800 MAD", date: "19 juin 2026", status: "Refusé" },
+  { id: "DV-2027", client: "Institut Pasteur Casa", product: "Acide chlorhydrique 37% (20L)", amount: "2 800 MAD", date: "15 juin 2026", status: "Archivé" },
+  { id: "DV-2026", client: "Clinilab Sarl", product: "Microscope binoculaire", amount: "6 100 MAD", date: "12 juin 2026", status: "Validé" },
+];
+
+const STATUSES = ["Tous", "En attente", "Validé", "Refusé", "Archivé"];
+const badgeMap = { "En attente": "gl-badge-warning", "Validé": "gl-badge-success", "Refusé": "gl-badge-danger", "Archivé": "gl-badge-neutral" };
 
 export default function QuoteRequests() {
-  const [quotes, setQuotes] = useState(MOCK.quotes);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("tous");
+  const [status, setStatus] = useState("Tous");
   const [selected, setSelected] = useState(null);
 
-  const filtered = quotes.filter((q) => {
-    const matchSearch =
-      q.client.toLowerCase().includes(search.toLowerCase()) ||
-      q.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "tous" || q.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(
+    () => QUOTES.filter((q) => status === "Tous" || q.status === status),
+    [status]
+  );
 
-  function updateStatus(id, status) {
-    setQuotes((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, status } : q))
-    );
-    setSelected(null);
-  }
-
-  const counts = {
-    "en attente": quotes.filter((q) => q.status === "en attente").length,
-    accepté: quotes.filter((q) => q.status === "accepté").length,
-    refusé: quotes.filter((q) => q.status === "refusé").length,
+  const sidebar = {
+    eyebrow: "Devis",
+    title: "Demandes de devis",
+    description: "Suivi par statut de traitement",
+    sections: [
+      {
+        title: "Statuts",
+        items: STATUSES.map((s) => ({
+          key: s,
+          label: s === "Tous" ? "Tous les devis" : s,
+          icon: s === "En attente" ? IconClock : s === "Validé" ? IconCheck : s === "Refusé" ? IconX : IconFile,
+          count: s === "Tous" ? QUOTES.length : QUOTES.filter((q) => q.status === s).length,
+          active: status === s,
+          onClick: () => setStatus(s),
+        })),
+      },
+    ],
+    promo: {
+      title: "Délai moyen",
+      text: "Le délai moyen de traitement d'un devis est de 1,8 jour ce mois-ci.",
+    },
   };
 
   return (
-    <AdminLayout title="Devis">
-      {/* Summary */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: "1rem" }}>
-        {[
-          { label: "En attente", value: counts["en attente"], cls: "badge-warning" },
-          { label: "Acceptés", value: counts["accepté"], cls: "badge-success" },
-          { label: "Refusés", value: counts["refusé"], cls: "badge-danger" },
-        ].map((s) => (
-          <div className="stat-card" key={s.label}>
-            <div className="stat-label">{s.label}</div>
-            <div
-              className="stat-value"
-              style={{ fontSize: 28 }}
-            >
-              <span className={`badge ${s.cls}`} style={{ fontSize: 20, padding: "4px 14px" }}>
-                {s.value}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Demandes de devis</b></>}
+        title="Demandes de devis"
+        description="Validez, refusez ou archivez les demandes reçues des clients."
+        actions={<button className="gl-btn gl-btn-secondary"><IconDownload width={15} height={15} /> Exporter</button>}
+      />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: "1rem", flexWrap: "wrap" }}>
-        <SearchBar value={search} onChange={setSearch} placeholder="Rechercher un devis…" />
-        <select
-          className="input"
-          style={{ width: "auto" }}
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="tous">Tous les statuts</option>
-          <option value="en attente">En attente</option>
-          <option value="accepté">Accepté</option>
-          <option value="refusé">Refusé</option>
-        </select>
-      </div>
-
-      <Card>
-        {filtered.length === 0 ? (
-          <EmptyState icon="📄" message="Aucun devis trouvé." />
-        ) : (
-          <table>
+      <div className="gl-card gl-card-pad">
+        <div className="gl-toolbar">
+          <select className="gl-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="gl-table-wrap">
+          <table className="gl-table">
             <thead>
               <tr>
-                <th>Référence</th>
-                <th>Client</th>
-                <th>Date</th>
-                <th>Montant</th>
-                <th>Statut</th>
-                <th>Actions</th>
+                <th>Référence</th><th>Client</th><th>Produit / service</th><th>Montant estimé</th><th>Date</th><th>Statut</th><th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((q) => (
-                <tr key={q.id}>
-                  <td style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 500 }}>
-                    {q.id}
-                  </td>
-                  <td>{q.client}</td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{q.date}</td>
-                  <td style={{ fontWeight: 500 }}>{q.amount}</td>
-                  <td>
-                    <Badge status={q.status} />
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Button size="sm" onClick={() => setSelected(q)}>
-                        👁️ Voir
-                      </Button>
-                      {q.status === "en attente" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => updateStatus(q.id, "accepté")}
-                          >
-                            ✓ Accepter
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => updateStatus(q.id, "refusé")}
-                            style={{ color: "#A32D2D" }}
-                          >
-                            ✗ Refuser
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                <tr key={q.id} className="is-clickable" onClick={() => setSelected(q)}>
+                  <td className="gl-cell-mono">{q.id}</td>
+                  <td style={{ fontWeight: 600 }}>{q.client}</td>
+                  <td className="gl-cell-muted">{q.product}</td>
+                  <td>{q.amount}</td>
+                  <td className="gl-cell-muted">{q.date}</td>
+                  <td><span className={`gl-badge ${badgeMap[q.status]}`}>{q.status}</span></td>
+                  <td><button className="gl-btn gl-btn-ghost gl-btn-sm" onClick={(e) => { e.stopPropagation(); setSelected(q); }}>Détails</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </Card>
+        </div>
+      </div>
 
-      {/* Detail modal */}
-      {selected && (
-        <Modal
-          title={`Devis ${selected.id}`}
-          onClose={() => setSelected(null)}
-        >
-          <div style={{ display: "grid", gap: 12 }}>
-            {[
-              ["Client", selected.client],
-              ["Date", selected.date],
-              ["Montant estimé", selected.amount],
-              ["Statut", <Badge key="s" status={selected.status} />],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "8px 0",
-                  borderBottom: "0.5px solid var(--color-border)",
-                  fontSize: 13,
-                }}
-              >
-                <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-                <span style={{ fontWeight: 500 }}>{value}</span>
-              </div>
-            ))}
-          </div>
-          {selected.status === "en attente" && (
-            <div style={{ display: "flex", gap: 8, marginTop: "1.25rem" }}>
-              <Button
-                variant="primary"
-                onClick={() => updateStatus(selected.id, "accepté")}
-                style={{ flex: 1, justifyContent: "center" }}
-              >
-                ✓ Accepter le devis
-              </Button>
-              <Button
-                onClick={() => updateStatus(selected.id, "refusé")}
-                style={{ flex: 1, justifyContent: "center", color: "#A32D2D" }}
-              >
-                ✗ Refuser
-              </Button>
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected ? `Devis ${selected.id}` : ""}
+        subtitle={selected ? `Demandé le ${selected.date}` : ""}
+        size="md"
+        footer={
+          <div className="gl-modal-foot between" style={{ width: "100%", padding: 0, border: "none", background: "transparent" }}>
+            <button className="gl-btn gl-btn-danger" onClick={() => setSelected(null)}><IconX width={14} height={14} /> Refuser</button>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="gl-btn gl-btn-ghost" onClick={() => setSelected(null)}>Fermer</button>
+              <button className="gl-btn gl-btn-primary" onClick={() => setSelected(null)}><IconCheck width={14} height={14} /> Valider le devis</button>
             </div>
-          )}
-        </Modal>
-      )}
+          </div>
+        }
+      >
+        {selected && (
+          <>
+            <div style={{ display: "flex", gap: 16, marginBottom: 18 }}>
+              <div style={{ flex: 1, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="gl-stat-icon"><IconBuilding width={16} height={16} /></div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--gl-gray-500)" }}>Client</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{selected.client}</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="gl-stat-icon"><IconCalendar width={16} height={16} /></div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--gl-gray-500)" }}>Date de demande</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{selected.date}</div>
+                </div>
+              </div>
+            </div>
+            <div className="gl-card gl-card-pad" style={{ background: "var(--gl-gray-50)", boxShadow: "none" }}>
+              <div className="gl-card-head"><h3>Détail de la demande</h3></div>
+              <div className="gl-table-wrap">
+                <table className="gl-table">
+                  <thead><tr><th>Article</th><th>Quantité</th><th>Montant estimé</th></tr></thead>
+                  <tbody>
+                    <tr><td>{selected.product}</td><td className="gl-cell-muted">1</td><td>{selected.amount}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="gl-field" style={{ marginTop: 16 }}>
+              <label>Note interne (visible par l'équipe seulement)</label>
+              <textarea rows={2} placeholder="Ajouter un commentaire sur ce devis…" />
+            </div>
+          </>
+        )}
+      </Modal>
     </AdminLayout>
   );
 }

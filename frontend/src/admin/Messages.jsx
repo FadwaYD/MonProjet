@@ -1,247 +1,130 @@
 import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Card, Button, Avatar, Modal, FormField, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import { IconMail, IconSend, IconPaperclip, IconPlus } from "./components/Icons";
+
+const FOLDERS = ["Boîte de réception", "Envoyés", "Archivés"];
+
+const THREADS = [
+  { id: 1, folder: "Boîte de réception", from: "Dr. Bensaid — Clinique Al Amal", subject: "Devis mis à jour", preview: "Pouvez-vous m'envoyer le devis mis à jour pour les lits médicalisés…", time: "10:24", unread: true },
+  { id: 2, folder: "Boîte de réception", from: "Clinilab Sarl", subject: "Commande bien reçue", preview: "Merci, la commande CMD-1042 est bien arrivée en bon état.", time: "09:02", unread: true },
+  { id: 3, folder: "Boîte de réception", from: "LabTech Maroc", subject: "Disponibilité centrifugeuse", preview: "Bonjour, la centrifugeuse CF-300 est-elle toujours disponible ?", time: "Hier", unread: false },
+  { id: 4, folder: "Envoyés", from: "Vous → BioMed Diagnostics", subject: "Confirmation de devis DV-2029", preview: "Bonjour, veuillez trouver ci-joint le devis demandé…", time: "Lun", unread: false },
+  { id: 5, folder: "Archivés", from: "Institut Pasteur Casa", subject: "Ancienne demande de partenariat", preview: "Suite à notre échange du mois dernier…", time: "12 juin", unread: false },
+];
 
 export default function Messages() {
-  const [messages, setMessages] = useState(MOCK.messages);
-  const [selected, setSelected] = useState(null);
-  const [replyOpen, setReplyOpen] = useState(false);
-  const [replyText, setReplyText] = useState("");
-  const [filter, setFilter] = useState("tous");
+  const [folder, setFolder] = useState("Boîte de réception");
+  const visible = THREADS.filter((t) => t.folder === folder);
+  const [active, setActive] = useState(visible[0] || null);
+  const [composeOpen, setComposeOpen] = useState(false);
 
-  function openMessage(msg) {
-    setSelected(msg);
-    if (!msg.read) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, read: true } : m))
-      );
-    }
-  }
+  const selectFolder = (f) => {
+    setFolder(f);
+    const first = THREADS.filter((t) => t.folder === f)[0] || null;
+    setActive(first);
+  };
 
-  function sendReply() {
-    if (!replyText.trim()) return;
-    setReplyText("");
-    setReplyOpen(false);
-    alert(`Réponse envoyée à ${selected.from} ✓`);
-  }
-
-  function deleteMessage(id) {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
-    setSelected(null);
-  }
-
-  const filtered = messages.filter((m) => {
-    if (filter === "non lus") return !m.read;
-    if (filter === "lus") return m.read;
-    return true;
-  });
-
-  const unread = messages.filter((m) => !m.read).length;
+  const sidebar = {
+    eyebrow: "Communication",
+    title: "Messages",
+    description: "Échanges avec les clients",
+    sections: [
+      {
+        title: "Dossiers",
+        items: FOLDERS.map((f) => ({
+          key: f,
+          label: f,
+          icon: IconMail,
+          count: THREADS.filter((t) => t.folder === f).length,
+          active: folder === f,
+          onClick: () => selectFolder(f),
+        })),
+      },
+    ],
+  };
 
   return (
-    <AdminLayout title="Messages">
-      {/* Stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3,1fr)",
-          gap: 12,
-          marginBottom: "1rem",
-        }}
-      >
-        {[
-          { label: "Total messages", value: messages.length },
-          { label: "Non lus", value: unread },
-          { label: "Lus", value: messages.length - unread },
-        ].map((s) => (
-          <div className="stat-card" key={s.label}>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
-          </div>
-        ))}
-      </div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Messages</b></>}
+        title={folder}
+        description="Centralisez les échanges avec vos clients."
+        actions={<button className="gl-btn gl-btn-primary" onClick={() => setComposeOpen(true)}><IconPlus width={15} height={15} /> Nouveau message</button>}
+      />
 
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: "1rem" }}>
-        {["tous", "non lus", "lus"].map((f) => (
-          <Button
-            key={f}
-            variant={filter === f ? "primary" : "default"}
-            size="sm"
-            onClick={() => setFilter(f)}
-            style={{ textTransform: "capitalize" }}
-          >
-            {f}
-            {f === "non lus" && unread > 0 && (
-              <span className="badge badge-danger" style={{ marginLeft: 4, padding: "1px 6px" }}>
-                {unread}
-              </span>
-            )}
-          </Button>
-        ))}
-      </div>
-
-      <Card>
-        {filtered.length === 0 ? (
-          <EmptyState icon="💬" message="Aucun message trouvé." />
-        ) : (
-          filtered.map((msg) => (
-            <div
-              key={msg.id}
-              onClick={() => openMessage(msg)}
+      <div className="gl-card" style={{ display: "grid", gridTemplateColumns: "320px 1fr", minHeight: 480, overflow: "hidden" }}>
+        <div style={{ borderRight: "1px solid var(--gl-gray-100)", overflowY: "auto" }}>
+          {visible.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActive(t)}
               style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-start",
-                padding: "12px 0",
-                borderBottom: "0.5px solid var(--color-border)",
-                cursor: "pointer",
-                fontWeight: msg.read ? 400 : 600,
-                transition: "background 0.1s",
+                display: "block", width: "100%", textAlign: "left", padding: "14px 18px",
+                borderBottom: "1px solid var(--gl-gray-100)", background: active?.id === t.id ? "var(--gl-bordeaux-50)" : "transparent", border: "none",
+                borderLeft: active?.id === t.id ? "3px solid var(--gl-bordeaux-700)" : "3px solid transparent",
               }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "var(--color-bg)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
             >
-              {!msg.read && (
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: "var(--color-primary)",
-                    marginTop: 14,
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              <Avatar name={msg.from} size={36} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 2,
-                  }}
-                >
-                  <span style={{ fontSize: 13 }}>{msg.from}</span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "var(--color-text-hint)",
-                      fontWeight: 400,
-                    }}
-                  >
-                    {msg.time}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, marginBottom: 2 }}>{msg.subject}</div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--color-text-muted)",
-                    fontWeight: 400,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {msg.body}
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontWeight: t.unread ? 700 : 600, fontSize: 13 }}>{t.from}</span>
+                <span style={{ fontSize: 11, color: "var(--gl-gray-500)" }}>{t.time}</span>
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: t.unread ? 700 : 500, color: "var(--gl-gray-900)", marginTop: 4 }}>{t.subject}</div>
+              <div style={{ fontSize: 12, color: "var(--gl-gray-500)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.preview}</div>
+            </button>
+          ))}
+          {visible.length === 0 && (
+            <div className="gl-empty"><div className="gl-empty-icon"><IconMail width={20} height={20} /></div><h4>Dossier vide</h4></div>
+          )}
+        </div>
+
+        <div style={{ padding: 24, display: "flex", flexDirection: "column" }}>
+          {active ? (
+            <>
+              <div style={{ borderBottom: "1px solid var(--gl-gray-100)", paddingBottom: 16, marginBottom: 16 }}>
+                <h3 style={{ fontSize: 16 }}>{active.subject}</h3>
+                <div className="gl-name-cell" style={{ marginTop: 10 }}>
+                  <div className="gl-avatar">{active.from.slice(0, 2).toUpperCase()}</div>
+                  <div>
+                    <div className="name">{active.from}</div>
+                    <div className="sub">{active.time}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
-        )}
-      </Card>
-
-      {/* Message detail modal */}
-      {selected && !replyOpen && (
-        <Modal
-          title={selected.subject}
-          onClose={() => setSelected(null)}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: "1rem",
-              paddingBottom: "1rem",
-              borderBottom: "0.5px solid var(--color-border)",
-            }}
-          >
-            <Avatar name={selected.from} size={40} />
-            <div>
-              <div style={{ fontWeight: 500 }}>{selected.from}</div>
-              <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
-                {selected.email} · {selected.time}
+              <p style={{ fontSize: 13.5, lineHeight: 1.7, color: "var(--gl-gray-900)", flex: 1 }}>{active.preview} Nous restons à votre disposition pour toute information complémentaire concernant cette demande.</p>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-end", borderTop: "1px solid var(--gl-gray-100)", paddingTop: 16 }}>
+                <textarea rows={2} placeholder="Répondre…" style={{ flex: 1, border: "1px solid var(--gl-gray-200)", borderRadius: "var(--gl-radius-sm)", padding: 10, fontFamily: "var(--gl-font-body)", fontSize: 13.5 }} />
+                <button className="gl-btn gl-btn-ghost gl-btn-icon"><IconPaperclip width={16} height={16} /></button>
+                <button className="gl-btn gl-btn-primary"><IconSend width={14} height={14} /> Envoyer</button>
               </div>
+            </>
+          ) : (
+            <div className="gl-empty" style={{ margin: "auto" }}>
+              <div className="gl-empty-icon"><IconMail width={20} height={20} /></div>
+              <h4>Sélectionnez une conversation</h4>
             </div>
-          </div>
-          <p style={{ fontSize: 13, lineHeight: 1.7, color: "var(--color-text-muted)" }}>
-            {selected.body}
-          </p>
-          <div style={{ display: "flex", gap: 8, marginTop: "1.25rem" }}>
-            <Button
-              variant="primary"
-              onClick={() => setReplyOpen(true)}
-              style={{ flex: 1, justifyContent: "center" }}
-            >
-              ↩️ Répondre
-            </Button>
-            <Button
-              onClick={() => deleteMessage(selected.id)}
-              style={{ color: "#A32D2D" }}
-            >
-              🗑️ Supprimer
-            </Button>
-          </div>
-        </Modal>
-      )}
+          )}
+        </div>
+      </div>
 
-      {/* Reply modal */}
-      {replyOpen && selected && (
-        <Modal
-          title={`Répondre à ${selected.from}`}
-          onClose={() => setReplyOpen(false)}
-        >
-          <div
-            style={{
-              padding: "8px 12px",
-              background: "var(--color-bg)",
-              borderRadius: "var(--radius-md)",
-              marginBottom: "1rem",
-              fontSize: 12,
-              color: "var(--color-text-muted)",
-              borderLeft: "2px solid var(--color-border-strong)",
-            }}
-          >
-            <div style={{ fontWeight: 500, marginBottom: 2 }}>{selected.from} a écrit :</div>
-            {selected.body}
-          </div>
-          <FormField label="Votre réponse">
-            <textarea
-              className="input"
-              rows={5}
-              style={{ resize: "vertical" }}
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Écrire votre réponse…"
-            />
-          </FormField>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: "1rem" }}>
-            <Button onClick={() => setReplyOpen(false)}>Annuler</Button>
-            <Button variant="primary" onClick={sendReply}>
-              ✉️ Envoyer
-            </Button>
-          </div>
-        </Modal>
-      )}
+      <Modal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        title="Nouveau message"
+        subtitle="Envoyer un message à un client"
+        size="md"
+        footer={
+          <>
+            <button className="gl-btn gl-btn-ghost" onClick={() => setComposeOpen(false)}>Annuler</button>
+            <button className="gl-btn gl-btn-primary" onClick={() => setComposeOpen(false)}><IconSend width={14} height={14} /> Envoyer</button>
+          </>
+        }
+      >
+        <div className="gl-field"><label>Destinataire</label><input placeholder="Nom du client ou email" /></div>
+        <div className="gl-field"><label>Sujet</label><input placeholder="Objet du message" /></div>
+        <div className="gl-field"><label>Message</label><textarea rows={5} placeholder="Rédigez votre message…" /></div>
+      </Modal>
     </AdminLayout>
   );
 }

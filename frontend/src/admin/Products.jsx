@@ -1,109 +1,110 @@
-import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Badge, Card, Button, SearchBar, Modal, FormField, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import React, { useMemo, useState } from "react";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import {
+  IconBox, IconFlask, IconPlus, IconSearch, IconEdit, IconTrash,
+  IconAlert, IconDownload,
+} from "./components/Icons";
 
-const EMPTY_PRODUCT = { name: "", cat: "", stock: "", price: "", status: "actif" };
+const CATEGORIES = ["Tous", "Réactifs", "Verrerie de laboratoire", "Produits chimiques", "Matériel scientifique", "Matériel médical"];
+
+const PRODUCTS = [
+  { id: "P-1042", name: "Réactif R-204 (Buffer pH 7)", cat: "Réactifs", price: "320 MAD", stock: 8, status: "Stock faible" },
+  { id: "P-1043", name: "Bécher en verre borosilicaté 500ml", cat: "Verrerie de laboratoire", price: "85 MAD", stock: 64, status: "En stock" },
+  { id: "P-1044", name: "Centrifugeuse de table CF-300", cat: "Matériel scientifique", price: "18 400 MAD", stock: 3, status: "En stock" },
+  { id: "P-1045", name: "Acide chlorhydrique 37% (1L)", cat: "Produits chimiques", price: "140 MAD", stock: 0, status: "Rupture" },
+  { id: "P-1046", name: "Lit médicalisé électrique", cat: "Matériel médical", price: "9 900 MAD", stock: 5, status: "En stock" },
+  { id: "P-1047", name: "Kit de réactifs immuno (50 tests)", cat: "Réactifs", price: "1 250 MAD", stock: 12, status: "En stock" },
+  { id: "P-1048", name: "Pipette graduée 10ml (lot de 10)", cat: "Verrerie de laboratoire", price: "210 MAD", stock: 41, status: "En stock" },
+  { id: "P-1049", name: "Concentrateur d'oxygène portable", cat: "Matériel médical", price: "7 300 MAD", stock: 2, status: "Stock faible" },
+];
+
+function StatusBadge({ status }) {
+  const map = {
+    "En stock": "gl-badge-success",
+    "Stock faible": "gl-badge-warning",
+    Rupture: "gl-badge-danger",
+  };
+  return <span className={`gl-badge ${map[status]}`}>{status}</span>;
+}
 
 export default function Products() {
-  const [products, setProducts] = useState(MOCK.products);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("tous");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY_PRODUCT);
-  const [deleteId, setDeleteId] = useState(null);
+  const [activeCat, setActiveCat] = useState("Tous");
+  const [query, setQuery] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
-  const filtered = products.filter((p) => {
-    const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.cat.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "tous" || p.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(() => {
+    return PRODUCTS.filter((p) => {
+      const matchCat = activeCat === "Tous" || p.cat === activeCat;
+      const matchQuery = p.name.toLowerCase().includes(query.toLowerCase()) || p.id.toLowerCase().includes(query.toLowerCase());
+      return matchCat && matchQuery;
+    });
+  }, [activeCat, query]);
 
-  function openAdd() {
-    setEditing(null);
-    setForm(EMPTY_PRODUCT);
-    setModalOpen(true);
-  }
+  const lowStockCount = PRODUCTS.filter((p) => p.status !== "En stock").length;
 
-  function openEdit(p) {
-    setEditing(p.id);
-    setForm({ name: p.name, cat: p.cat, stock: p.stock, price: p.price, status: p.status });
-    setModalOpen(true);
-  }
-
-  function handleSave() {
-    if (!form.name.trim()) return;
-    if (editing) {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === editing ? { ...p, ...form, stock: Number(form.stock) } : p))
-      );
-    } else {
-      setProducts((prev) => [
-        ...prev,
-        { id: Date.now(), ...form, stock: Number(form.stock) },
-      ]);
-    }
-    setModalOpen(false);
-  }
-
-  function handleDelete(id) {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setDeleteId(null);
-  }
-
-  const stockBadge = (stock) => {
-    if (stock === 0) return "rupture";
-    if (stock <= 10) return "faible";
-    return "actif";
+  const sidebar = {
+    eyebrow: "Catalogue",
+    title: "Produits",
+    description: "Filtrer par famille de produits",
+    sections: [
+      {
+        title: "Familles",
+        items: CATEGORIES.map((c) => ({
+          key: c,
+          label: c,
+          icon: c === "Réactifs" ? IconFlask : IconBox,
+          active: activeCat === c,
+          count: c === "Tous" ? PRODUCTS.length : PRODUCTS.filter((p) => p.cat === c).length,
+          onClick: () => setActiveCat(c),
+        })),
+      },
+      {
+        title: "Alertes",
+        items: [
+          { key: "low", label: "Stock faible / rupture", icon: IconAlert, count: lowStockCount, onClick: () => setActiveCat("Tous") },
+        ],
+      },
+    ],
   };
 
   return (
-    <AdminLayout title="Produits">
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <SearchBar value={search} onChange={setSearch} placeholder="Rechercher un produit…" />
-        <select
-          className="input"
-          style={{ width: "auto" }}
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="tous">Tous les statuts</option>
-          <option value="actif">Actif</option>
-          <option value="faible">Stock faible</option>
-          <option value="rupture">Rupture</option>
-        </select>
-        <Button variant="primary" onClick={openAdd} style={{ marginLeft: "auto" }}>
-          + Ajouter un produit
-        </Button>
-      </div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Produits</b></>}
+        title="Catalogue des produits"
+        description="Gérez les réactifs, la verrerie, le matériel scientifique et médical."
+        actions={
+          <>
+            <button className="gl-btn gl-btn-secondary"><IconDownload width={15} height={15} /> Exporter</button>
+            <button className="gl-btn gl-btn-primary" onClick={() => setAddOpen(true)}>
+              <IconPlus width={15} height={15} /> Ajouter un produit
+            </button>
+          </>
+        }
+      />
 
-      <Card>
-        <div className="card-title">
-          <span>
-            Produits{" "}
-            <span
-              className="badge badge-gray"
-              style={{ fontWeight: 400, marginLeft: 6 }}
-            >
-              {filtered.length}
-            </span>
-          </span>
+      <div className="gl-card gl-card-pad">
+        <div className="gl-toolbar">
+          <div className="gl-search">
+            <IconSearch width={15} height={15} />
+            <input placeholder="Rechercher par nom ou référence…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          <select className="gl-select" value={activeCat} onChange={(e) => setActiveCat(e.target.value)}>
+            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
         </div>
 
-        {filtered.length === 0 ? (
-          <EmptyState icon="📦" message="Aucun produit trouvé." />
-        ) : (
-          <table>
+        <div className="gl-table-wrap">
+          <table className="gl-table">
             <thead>
               <tr>
-                <th>Nom</th>
+                <th>Référence</th>
+                <th>Produit</th>
                 <th>Catégorie</th>
-                <th>Stock</th>
                 <th>Prix</th>
+                <th>Stock</th>
                 <th>Statut</th>
                 <th></th>
               </tr>
@@ -111,110 +112,85 @@ export default function Products() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id}>
-                  <td style={{ fontWeight: 500 }}>{p.name}</td>
-                  <td>
-                    <span className="badge badge-gray">{p.cat}</span>
-                  </td>
-                  <td
-                    style={{
-                      color: p.stock === 0 ? "#A32D2D" : p.stock <= 10 ? "#854F0B" : "inherit",
-                      fontWeight: p.stock <= 10 ? 500 : 400,
-                    }}
-                  >
-                    {p.stock}
-                  </td>
+                  <td className="gl-cell-mono">{p.id}</td>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td className="gl-cell-muted">{p.cat}</td>
                   <td>{p.price}</td>
+                  <td className="gl-cell-muted">{p.stock} u.</td>
+                  <td><StatusBadge status={p.status} /></td>
                   <td>
-                    <Badge status={stockBadge(p.stock)} />
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Button size="sm" onClick={() => openEdit(p)}>
-                        ✏️ Modifier
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => setDeleteId(p.id)}>
-                        🗑️
-                      </Button>
+                    <div className="gl-row-actions">
+                      <button className="gl-btn gl-btn-ghost gl-btn-icon"><IconEdit width={15} height={15} /></button>
+                      <button className="gl-btn gl-btn-ghost gl-btn-icon"><IconTrash width={15} height={15} /></button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={7}>
+                  <div className="gl-empty">
+                    <div className="gl-empty-icon"><IconSearch width={20} height={20} /></div>
+                    <h4>Aucun produit trouvé</h4>
+                    <p>Essayez une autre recherche ou catégorie.</p>
+                  </div>
+                </td></tr>
+              )}
             </tbody>
           </table>
-        )}
-      </Card>
+        </div>
 
-      {/* Add/Edit modal */}
-      {modalOpen && (
-        <Modal
-          title={editing ? "Modifier le produit" : "Ajouter un produit"}
-          onClose={() => setModalOpen(false)}
-        >
-          <FormField label="Nom du produit *">
-            <input
-              className="input"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Ex: Chaise ergonomique"
-            />
-          </FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Catégorie">
-              <select
-                className="input"
-                value={form.cat}
-                onChange={(e) => setForm((f) => ({ ...f, cat: e.target.value }))}
-              >
-                <option value="">Sélectionner…</option>
-                {MOCK.categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Stock">
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={form.stock}
-                onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                placeholder="0"
-              />
-            </FormField>
+        <div className="gl-pagination">
+          <span>{filtered.length} produit(s) sur {PRODUCTS.length}</span>
+          <div className="gl-pagination-btns">
+            <button className="gl-page-btn active">1</button>
+            <button className="gl-page-btn">2</button>
+            <button className="gl-page-btn">›</button>
           </div>
-          <FormField label="Prix (MAD)">
-            <input
-              className="input"
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-              placeholder="Ex: 1 290 MAD"
-            />
-          </FormField>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: "1rem" }}>
-            <Button onClick={() => setModalOpen(false)}>Annuler</Button>
-            <Button variant="primary" onClick={handleSave}>
-              {editing ? "Enregistrer" : "Ajouter"}
-            </Button>
-          </div>
-        </Modal>
-      )}
+        </div>
+      </div>
 
-      {/* Delete confirmation */}
-      {deleteId && (
-        <Modal title="Supprimer le produit ?" onClose={() => setDeleteId(null)}>
-          <p style={{ fontSize: 13, marginBottom: "1rem", color: "var(--color-text-muted)" }}>
-            Cette action est irréversible. Le produit sera définitivement supprimé.
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <Button onClick={() => setDeleteId(null)}>Annuler</Button>
-            <Button variant="primary" onClick={() => handleDelete(deleteId)} style={{ background: "#A32D2D", borderColor: "#A32D2D" }}>
-              Supprimer
-            </Button>
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Ajouter un produit"
+        subtitle="Renseignez les informations du nouvel article du catalogue"
+        size="md"
+        footer={
+          <>
+            <button className="gl-btn gl-btn-ghost" onClick={() => setAddOpen(false)}>Annuler</button>
+            <button className="gl-btn gl-btn-primary" onClick={() => setAddOpen(false)}>Enregistrer le produit</button>
+          </>
+        }
+      >
+        <div className="gl-field">
+          <label>Nom du produit</label>
+          <input placeholder="Ex. Centrifugeuse de table CF-300" />
+        </div>
+        <div className="gl-field-row">
+          <div className="gl-field">
+            <label>Catégorie</label>
+            <select>{CATEGORIES.filter((c) => c !== "Tous").map((c) => <option key={c}>{c}</option>)}</select>
           </div>
-        </Modal>
-      )}
+          <div className="gl-field">
+            <label>Prix (MAD)</label>
+            <input type="number" placeholder="0,00" />
+          </div>
+        </div>
+        <div className="gl-field-row">
+          <div className="gl-field">
+            <label>Quantité en stock</label>
+            <input type="number" placeholder="0" />
+          </div>
+          <div className="gl-field">
+            <label>Statut</label>
+            <select><option>En stock</option><option>Stock faible</option><option>Rupture</option></select>
+          </div>
+        </div>
+        <div className="gl-field">
+          <label>Description</label>
+          <textarea rows={3} placeholder="Caractéristiques techniques, usage recommandé…" />
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }

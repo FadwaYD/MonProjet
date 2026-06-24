@@ -1,187 +1,122 @@
-import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Badge, Card, Button, SearchBar, Modal, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import React, { useMemo, useState } from "react";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import { IconCart, IconClock, IconCheck, IconX, IconDownload, IconBox } from "./components/Icons";
 
-const STATUS_FLOW = {
-  "en attente": ["en cours", "annulé"],
-  "en cours": ["livré", "annulé"],
-  livré: [],
-  annulé: [],
-};
+const ORDERS = [
+  { id: "CMD-1042", client: "Clinilab Sarl", items: 3, amount: "4 850 MAD", date: "24 juin 2026", status: "Livrée" },
+  { id: "CMD-1041", client: "LabTech Maroc", items: 1, amount: "18 400 MAD", date: "23 juin 2026", status: "Expédiée" },
+  { id: "CMD-1040", client: "BioMed Diagnostics", items: 5, amount: "9 200 MAD", date: "22 juin 2026", status: "En préparation" },
+  { id: "CMD-1039", client: "Clinique Al Amal", items: 2, amount: "19 800 MAD", date: "20 juin 2026", status: "Expédiée" },
+  { id: "CMD-1038", client: "Institut Pasteur Casa", items: 8, amount: "3 100 MAD", date: "18 juin 2026", status: "Annulée" },
+  { id: "CMD-1037", client: "Clinilab Sarl", items: 1, amount: "6 100 MAD", date: "14 juin 2026", status: "Livrée" },
+];
+
+const STATUSES = ["Toutes", "En préparation", "Expédiée", "Livrée", "Annulée"];
+const badgeMap = { "En préparation": "gl-badge-warning", "Expédiée": "gl-badge-info", "Livrée": "gl-badge-success", "Annulée": "gl-badge-danger" };
+
+const TIMELINE = [
+  { label: "Commande reçue", done: true },
+  { label: "En préparation", done: true },
+  { label: "Expédiée", done: true },
+  { label: "Livrée", done: false },
+];
 
 export default function Orders() {
-  const [orders, setOrders] = useState(MOCK.orders);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("tous");
+  const [status, setStatus] = useState("Toutes");
   const [selected, setSelected] = useState(null);
 
-  const filtered = orders.filter((o) => {
-    const matchSearch =
-      o.client.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "tous" || o.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(
+    () => ORDERS.filter((o) => status === "Toutes" || o.status === status),
+    [status]
+  );
 
-  function updateStatus(id, status) {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status } : o))
-    );
-    setSelected((prev) => (prev?.id === id ? { ...prev, status } : prev));
-  }
-
-  const counts = {
-    total: orders.length,
-    "en attente": orders.filter((o) => o.status === "en attente").length,
-    "en cours": orders.filter((o) => o.status === "en cours").length,
-    livré: orders.filter((o) => o.status === "livré").length,
+  const sidebar = {
+    eyebrow: "Ventes",
+    title: "Commandes",
+    description: "Suivi logistique des commandes clients",
+    sections: [
+      {
+        title: "Statuts",
+        items: STATUSES.map((s) => ({
+          key: s,
+          label: s === "Toutes" ? "Toutes les commandes" : s,
+          icon: s === "En préparation" ? IconBox : s === "Expédiée" ? IconClock : s === "Livrée" ? IconCheck : s === "Annulée" ? IconX : IconCart,
+          count: s === "Toutes" ? ORDERS.length : ORDERS.filter((o) => o.status === s).length,
+          active: status === s,
+          onClick: () => setStatus(s),
+        })),
+      },
+    ],
   };
 
   return (
-    <AdminLayout title="Commandes">
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: "1rem" }}>
-        {[
-          { label: "Total", value: counts.total },
-          { label: "En attente", value: counts["en attente"] },
-          { label: "En cours", value: counts["en cours"] },
-          { label: "Livrées", value: counts.livré },
-        ].map((s) => (
-          <div className="stat-card" key={s.label}>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
-          </div>
-        ))}
-      </div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Commandes</b></>}
+        title="Commandes clients"
+        description="Suivez la préparation, l'expédition et la livraison des commandes."
+        actions={<button className="gl-btn gl-btn-secondary"><IconDownload width={15} height={15} /> Exporter</button>}
+      />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: "1rem", flexWrap: "wrap" }}>
-        <SearchBar value={search} onChange={setSearch} placeholder="Rechercher une commande…" />
-        <select
-          className="input"
-          style={{ width: "auto" }}
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-        >
-          <option value="tous">Tous les statuts</option>
-          <option value="en attente">En attente</option>
-          <option value="en cours">En cours</option>
-          <option value="livré">Livré</option>
-          <option value="annulé">Annulé</option>
-        </select>
-      </div>
-
-      <Card>
-        {filtered.length === 0 ? (
-          <EmptyState icon="🚚" message="Aucune commande trouvée." />
-        ) : (
-          <table>
+      <div className="gl-card gl-card-pad">
+        <div className="gl-toolbar">
+          <select className="gl-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="gl-table-wrap">
+          <table className="gl-table">
             <thead>
-              <tr>
-                <th>ID</th>
-                <th>Client</th>
-                <th>Date</th>
-                <th>Articles</th>
-                <th>Montant</th>
-                <th>Statut</th>
-                <th>Actions</th>
-              </tr>
+              <tr><th>N° commande</th><th>Client</th><th>Articles</th><th>Montant</th><th>Date</th><th>Statut</th><th></th></tr>
             </thead>
             <tbody>
               {filtered.map((o) => (
-                <tr key={o.id}>
-                  <td style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 500 }}>
-                    {o.id}
-                  </td>
-                  <td>{o.client}</td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{o.date}</td>
-                  <td>{o.items}</td>
-                  <td style={{ fontWeight: 500 }}>{o.amount}</td>
-                  <td>
-                    <Badge status={o.status} />
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Button size="sm" onClick={() => setSelected(o)}>
-                        👁️ Détail
-                      </Button>
-                      {STATUS_FLOW[o.status]?.map((next) => (
-                        <Button
-                          key={next}
-                          size="sm"
-                          variant={next === "livré" || next === "en cours" ? "primary" : "default"}
-                          onClick={() => updateStatus(o.id, next)}
-                          style={next === "annulé" ? { color: "#A32D2D" } : {}}
-                        >
-                          → {next}
-                        </Button>
-                      ))}
-                    </div>
-                  </td>
+                <tr key={o.id} className="is-clickable" onClick={() => setSelected(o)}>
+                  <td className="gl-cell-mono">{o.id}</td>
+                  <td style={{ fontWeight: 600 }}>{o.client}</td>
+                  <td className="gl-cell-muted">{o.items} article(s)</td>
+                  <td>{o.amount}</td>
+                  <td className="gl-cell-muted">{o.date}</td>
+                  <td><span className={`gl-badge ${badgeMap[o.status]}`}>{o.status}</span></td>
+                  <td><button className="gl-btn gl-btn-ghost gl-btn-sm" onClick={(e) => { e.stopPropagation(); setSelected(o); }}>Suivre</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected ? `Commande ${selected.id}` : ""}
+        subtitle={selected ? `${selected.client} · ${selected.amount}` : ""}
+        size="sm"
+        footer={<button className="gl-btn gl-btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => setSelected(null)}>Marquer l'étape suivante</button>}
+      >
+        {selected && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {TIMELINE.map((t, i) => (
+              <div key={t.label} style={{ display: "flex", gap: 12, position: "relative", paddingBottom: i < TIMELINE.length - 1 ? 28 : 0 }}>
+                {i < TIMELINE.length - 1 && (
+                  <div style={{ position: "absolute", left: 9, top: 22, width: 2, height: "calc(100% - 12px)", background: t.done ? "var(--gl-bordeaux-500)" : "var(--gl-gray-200)" }} />
+                )}
+                <div style={{
+                  width: 20, height: 20, borderRadius: "50%", flexShrink: 0, zIndex: 1,
+                  background: t.done ? "var(--gl-bordeaux-700)" : "var(--gl-white)",
+                  border: t.done ? "none" : "2px solid var(--gl-gray-300)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {t.done && <IconCheck width={11} height={11} style={{ color: "#fff" }} />}
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: t.done ? 700 : 500, color: t.done ? "var(--gl-gray-900)" : "var(--gl-gray-500)" }}>{t.label}</div>
+              </div>
+            ))}
+          </div>
         )}
-      </Card>
-
-      {/* Detail modal */}
-      {selected && (
-        <Modal
-          title={`Commande ${selected.id}`}
-          onClose={() => setSelected(null)}
-        >
-          {[
-            ["Client", selected.client],
-            ["Date", selected.date],
-            ["Articles", `${selected.items} article(s)`],
-            ["Montant", selected.amount],
-            ["Statut", <Badge key="s" status={selected.status} />],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "9px 0",
-                borderBottom: "0.5px solid var(--color-border)",
-                fontSize: 13,
-              }}
-            >
-              <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-              <span style={{ fontWeight: 500 }}>{value}</span>
-            </div>
-          ))}
-
-          {STATUS_FLOW[selected.status]?.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: "1.25rem",
-                flexWrap: "wrap",
-              }}
-            >
-              {STATUS_FLOW[selected.status].map((next) => (
-                <Button
-                  key={next}
-                  variant={next === "livré" || next === "en cours" ? "primary" : "default"}
-                  onClick={() => updateStatus(selected.id, next)}
-                  style={
-                    next === "annulé"
-                      ? { color: "#A32D2D", flex: 1, justifyContent: "center" }
-                      : { flex: 1, justifyContent: "center" }
-                  }
-                >
-                  Passer à : {next}
-                </Button>
-              ))}
-            </div>
-          )}
-        </Modal>
-      )}
+      </Modal>
     </AdminLayout>
   );
 }

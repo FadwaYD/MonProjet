@@ -1,269 +1,134 @@
-import React, { useState } from "react";
-import AdminLayout from "./Layout";
-import { Badge, Card, Button, Avatar, Modal, EmptyState } from "./components/UI";
-import { MOCK } from "../mockData";
-import "./admin.css";
+import React, { useMemo, useState } from "react";
+import AdminLayout from "./components/AdminLayout";
+import PageHead from "./components/PageHead";
+import Modal from "./components/Modal";
+import { IconShield, IconClock, IconCheck, IconX, IconFile, IconBuilding, IconMail } from "./components/Icons";
+
+const ACCOUNTS = [
+  { id: "VA-08", company: "BioMed Diagnostics", contact: "Dr. Hicham Tazi", email: "h.tazi@biomed-dx.ma", date: "23 juin 2026", status: "En attente", docs: ["Registre de commerce", "Pièce d'identité du gérant"] },
+  { id: "VA-07", company: "Institut Pasteur Casa", contact: "Mme. Salma Idrissi", email: "s.idrissi@pasteur-casa.ma", date: "22 juin 2026", status: "En attente", docs: ["Registre de commerce", "Attestation fiscale"] },
+  { id: "VA-06", company: "Clinique Najah", contact: "Dr. Omar Fassi", email: "contact@clinique-najah.ma", date: "19 juin 2026", status: "Validé", docs: ["Registre de commerce"] },
+  { id: "VA-05", company: "Distri-Lab Express", contact: "M. Rachid Amine", email: "r.amine@distrilab.ma", date: "16 juin 2026", status: "Refusé", docs: ["Registre de commerce"] },
+];
+
+const STATUSES = ["Tous", "En attente", "Validé", "Refusé"];
+const badgeMap = { "En attente": "gl-badge-warning", "Validé": "gl-badge-success", "Refusé": "gl-badge-danger" };
 
 export default function AccountValidations() {
-  const [validations, setValidations] = useState(MOCK.validations);
+  const [status, setStatus] = useState("En attente");
   const [selected, setSelected] = useState(null);
-  const [filter, setFilter] = useState("tous");
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectModal, setRejectModal] = useState(null);
 
-  function updateStatus(id, status) {
-    setValidations((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, status } : v))
-    );
-    setSelected(null);
-    setRejectModal(null);
-    setRejectReason("");
-  }
+  const filtered = useMemo(
+    () => ACCOUNTS.filter((a) => status === "Tous" || a.status === status),
+    [status]
+  );
 
-  const filtered = validations.filter((v) => {
-    if (filter === "en attente") return v.status === "en attente";
-    if (filter === "traités") return v.status !== "en attente";
-    return true;
-  });
-
-  const pending = validations.filter((v) => v.status === "en attente").length;
-  const validated = validations.filter((v) => v.status === "validé").length;
-  const rejected = validations.filter((v) => v.status === "rejeté").length;
+  const sidebar = {
+    eyebrow: "Sécurité des comptes",
+    title: "Validations de comptes",
+    description: "Vérifiez l'identité des nouveaux clients professionnels",
+    sections: [
+      {
+        title: "Statuts",
+        items: STATUSES.map((s) => ({
+          key: s,
+          label: s === "Tous" ? "Tous les comptes" : s,
+          icon: s === "En attente" ? IconClock : s === "Validé" ? IconCheck : s === "Refusé" ? IconX : IconShield,
+          count: s === "Tous" ? ACCOUNTS.length : ACCOUNTS.filter((a) => a.status === s).length,
+          active: status === s,
+          onClick: () => setStatus(s),
+        })),
+      },
+    ],
+    promo: {
+      title: "Rappel sécurité",
+      text: "Vérifiez toujours le registre de commerce avant de valider un nouveau compte professionnel.",
+    },
+  };
 
   return (
-    <AdminLayout title="Validations de comptes">
-      {/* Stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3,1fr)",
-          gap: 12,
-          marginBottom: "1rem",
-        }}
-      >
-        {[
-          { label: "En attente", value: pending, cls: "badge-warning" },
-          { label: "Validés", value: validated, cls: "badge-success" },
-          { label: "Rejetés", value: rejected, cls: "badge-danger" },
-        ].map((s) => (
-          <div className="stat-card" key={s.label}>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">
-              <span
-                className={`badge ${s.cls}`}
-                style={{ fontSize: 18, padding: "3px 14px" }}
-              >
-                {s.value}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+    <AdminLayout sidebar={sidebar}>
+      <PageHead
+        crumb={<>Admin&nbsp;/&nbsp;<b>Validations de comptes</b></>}
+        title="Validation des comptes clients"
+        description="Approuvez ou refusez les inscriptions des comptes professionnels."
+      />
 
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: "1rem" }}>
-        {["tous", "en attente", "traités"].map((f) => (
-          <Button
-            key={f}
-            variant={filter === f ? "primary" : "default"}
-            size="sm"
-            onClick={() => setFilter(f)}
-            style={{ textTransform: "capitalize" }}
-          >
-            {f}
-            {f === "en attente" && pending > 0 && (
-              <span
-                className="badge badge-warning"
-                style={{ marginLeft: 4, padding: "1px 6px" }}
-              >
-                {pending}
-              </span>
-            )}
-          </Button>
-        ))}
-      </div>
-
-      <Card>
-        {filtered.length === 0 ? (
-          <EmptyState icon="✅" message="Aucune demande à afficher." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Demandeur</th>
-                <th>Entreprise</th>
-                <th>Type</th>
-                <th>Date</th>
-                <th>Statut</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+      <div className="gl-card gl-card-pad">
+        <div className="gl-toolbar">
+          <select className="gl-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="gl-table-wrap">
+          <table className="gl-table">
+            <thead><tr><th>Référence</th><th>Société</th><th>Contact</th><th>Date</th><th>Statut</th><th></th></tr></thead>
             <tbody>
-              {filtered.map((v) => (
-                <tr key={v.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar name={v.name} size={30} />
-                      <div>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{v.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--color-text-hint)" }}>
-                          {v.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ fontWeight: 500 }}>{v.company}</td>
-                  <td>
-                    <span className="badge badge-gray">{v.type}</span>
-                  </td>
-                  <td style={{ color: "var(--color-text-muted)" }}>{v.date}</td>
-                  <td>
-                    <Badge status={v.status} />
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Button size="sm" onClick={() => setSelected(v)}>
-                        👁️ Voir
-                      </Button>
-                      {v.status === "en attente" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => updateStatus(v.id, "validé")}
-                          >
-                            ✓ Valider
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => setRejectModal(v)}
-                            style={{ color: "#A32D2D" }}
-                          >
-                            ✗ Rejeter
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+              {filtered.map((a) => (
+                <tr key={a.id} className="is-clickable" onClick={() => setSelected(a)}>
+                  <td className="gl-cell-mono">{a.id}</td>
+                  <td style={{ fontWeight: 600 }}>{a.company}</td>
+                  <td className="gl-cell-muted">{a.contact}</td>
+                  <td className="gl-cell-muted">{a.date}</td>
+                  <td><span className={`gl-badge ${badgeMap[a.status]}`}>{a.status}</span></td>
+                  <td><button className="gl-btn gl-btn-ghost gl-btn-sm" onClick={(e) => { e.stopPropagation(); setSelected(a); }}>Examiner</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </Card>
+        </div>
+      </div>
 
-      {/* Detail modal */}
-      {selected && (
-        <Modal title="Demande de compte" onClose={() => setSelected(null)}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              marginBottom: "1rem",
-              paddingBottom: "1rem",
-              borderBottom: "0.5px solid var(--color-border)",
-            }}
-          >
-            <Avatar name={selected.name} size={48} />
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 15 }}>{selected.name}</div>
-              <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
-                {selected.email}
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected ? selected.company : ""}
+        subtitle={selected ? `Demande ${selected.id} · reçue le ${selected.date}` : ""}
+        size="md"
+        footer={
+          selected?.status === "En attente" ? (
+            <div className="gl-modal-foot between" style={{ width: "100%", padding: 0, border: "none", background: "transparent" }}>
+              <button className="gl-btn gl-btn-danger" onClick={() => setSelected(null)}><IconX width={14} height={14} /> Refuser le compte</button>
+              <button className="gl-btn gl-btn-primary" onClick={() => setSelected(null)}><IconCheck width={14} height={14} /> Valider le compte</button>
+            </div>
+          ) : (
+            <button className="gl-btn gl-btn-ghost" onClick={() => setSelected(null)}>Fermer</button>
+          )
+        }
+      >
+        {selected && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", gap: 16 }}>
+              <div style={{ flex: 1, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="gl-stat-icon"><IconBuilding width={16} height={16} /></div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--gl-gray-500)" }}>Contact principal</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{selected.contact}</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="gl-stat-icon"><IconMail width={16} height={16} /></div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: "var(--gl-gray-500)" }}>Email</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{selected.email}</div>
+                </div>
               </div>
             </div>
-            <Badge status={selected.status} />
-          </div>
-
-          {[
-            ["Entreprise", selected.company],
-            ["Type d'activité", selected.type],
-            ["Date de demande", selected.date],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "9px 0",
-                borderBottom: "0.5px solid var(--color-border)",
-                fontSize: 13,
-              }}
-            >
-              <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-              <span style={{ fontWeight: 500 }}>{value}</span>
+            <div>
+              <div className="gl-card-sub" style={{ marginBottom: 8 }}>Documents soumis</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {selected.docs.map((d) => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: "1px solid var(--gl-gray-200)", borderRadius: "var(--gl-radius-sm)" }}>
+                    <IconFile width={16} height={16} style={{ color: "var(--gl-bordeaux-700)" }} />
+                    <span style={{ fontSize: 13, flex: 1 }}>{d}</span>
+                    <button className="gl-btn gl-btn-ghost gl-btn-sm">Voir</button>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-
-          {selected.status === "en attente" && (
-            <div style={{ display: "flex", gap: 8, marginTop: "1.25rem" }}>
-              <Button
-                variant="primary"
-                onClick={() => updateStatus(selected.id, "validé")}
-                style={{ flex: 1, justifyContent: "center" }}
-              >
-                ✓ Valider le compte
-              </Button>
-              <Button
-                onClick={() => {
-                  setSelected(null);
-                  setRejectModal(selected);
-                }}
-                style={{ flex: 1, justifyContent: "center", color: "#A32D2D" }}
-              >
-                ✗ Rejeter
-              </Button>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Reject modal with reason */}
-      {rejectModal && (
-        <Modal
-          title={`Rejeter la demande de ${rejectModal.name}`}
-          onClose={() => setRejectModal(null)}
-        >
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--color-text-muted)",
-              marginBottom: "1rem",
-            }}
-          >
-            Indiquez optionnellement la raison du rejet. Cette information peut être
-            envoyée au demandeur.
-          </p>
-          <textarea
-            className="input"
-            rows={4}
-            style={{ resize: "vertical" }}
-            placeholder="Raison du rejet (optionnel)…"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-              marginTop: "1rem",
-            }}
-          >
-            <Button onClick={() => setRejectModal(null)}>Annuler</Button>
-            <Button
-              onClick={() => updateStatus(rejectModal.id, "rejeté")}
-              style={{
-                background: "#A32D2D",
-                color: "#fff",
-                borderColor: "#A32D2D",
-              }}
-            >
-              Confirmer le rejet
-            </Button>
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </AdminLayout>
   );
 }
