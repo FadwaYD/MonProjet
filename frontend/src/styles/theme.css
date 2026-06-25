@@ -1,0 +1,115 @@
+/* ==========================================================================
+   GRAND LABORATOIRE — Design tokens
+   Palette : Bordeaux (action/identité) + Gris (neutre/données)
+   Pour de meilleures performances, vous pouvez déplacer cet @import
+   vers une balise <link> dans public/index.html
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root {
+  /* --- Bordeaux --- */
+  --gl-bordeaux-900: #3A0F1F;
+  --gl-bordeaux-800: #4E1429;
+  --gl-bordeaux-700: #5C1530;   /* primaire */
+  --gl-bordeaux-600: #74203D;
+  --gl-bordeaux-500: #8E2347;   /* accent / hover */
+  --gl-bordeaux-400: #B14C6B;
+  --gl-bordeaux-100: #F3E2E8;   /* fond doux actif */
+  --gl-bordeaux-50:  #FBF2F4;
+
+  /* --- Gris (graphite -> mist) --- */
+  --gl-gray-900: #202225;       /* titres */
+  --gl-gray-700: #43464C;
+  --gl-gray-600: #6B7078;       /* texte secondaire */
+  --gl-gray-500: #8A8F97;
+  --gl-gray-300: #D7D9DC;
+  --gl-gray-200: #E7E8EA;
+  --gl-gray-100: #F1F2F3;
+  --gl-gray-50:  #F6F7F8;       /* fond de page */
+
+  --gl-white: #FFFFFF;
+
+  /* --- Sémantique --- */
+  --gl-success: #1F7A4D;
+  --gl-success-bg: #E6F3EC;
+  --gl-warning: #B5740B;
+  --gl-warning-bg: #FBF0DC;
+  --gl-danger: #B3261E;
+  --gl-danger-bg: #FAE6E4;
+  --gl-info: #2E6F9E;
+  --gl-info-bg: #E5F0F7;
+
+  /* --- Typo --- */
+  --gl-font-display: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --gl-font-body: 'Inter', 'Segoe UI', sans-serif;
+  --gl-font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* --- Forme --- */
+  --gl-radius-sm: 8px;
+  --gl-radius-md: 12px;
+  --gl-radius-lg: 18px;
+  --gl-radius-pill: 999px;
+
+  /* --- Ombres --- */
+  --gl-shadow-sm: 0 1px 2px rgba(32, 34, 37, 0.06);
+  --gl-shadow-md: 0 6px 16px rgba(32, 34, 37, 0.08);
+  --gl-shadow-lg: 0 18px 40px rgba(58, 15, 31, 0.18);
+
+  --gl-transition: 160ms ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--gl-font-body);
+  color: var(--gl-gray-900);
+  background: var(--gl-gray-50);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--gl-font-display);
+  color: var(--gl-gray-900);
+  margin: 0;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font-family: var(--gl-font-body);
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--gl-bordeaux-100);
+}
+
+/* Accessibilité : focus visible clavier */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--gl-bordeaux-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- Scrollbars discrètes --- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gl-gray-300); border-radius: var(--gl-radius-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--gl-gray-500); }
