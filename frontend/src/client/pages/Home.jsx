@@ -1,6 +1,6 @@
 import React from "react";
-import Navbar from "./Navbar";
-import Footer from "./Footer";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import {
   FaFlask,
   FaVial,
@@ -57,33 +57,42 @@ function Home() {
       <Navbar />
 
       {/* HERO */}
-      <section style={styles.hero}>
-        <div style={styles.container}>
-          <span style={styles.badge}>
-            Leader des solutions biomédicales
-          </span>
+      {/* HERO */}
+<section style={styles.hero}>
+  <div style={styles.overlay}></div>
 
-          <h1 style={styles.title}>
-            Votre partenaire biomédical de confiance
-          </h1>
+  <div style={styles.heroContent}>
+    <div style={styles.badge}>
+      🔬 Leader des solutions biomédicales en Afrique de l'Ouest
+    </div>
 
-          <p style={styles.subtitle}>
-            Réactifs, verrerie, produits chimiques et matériel médical.
-            Grand Laboratoire vous accompagne avec excellence depuis
-            plus de 15 ans.
-          </p>
+    <h1 style={styles.title}>
+      Votre partenaire
+      <br />
+      <span style={styles.titlePink}>
+        biomédical de
+      </span>
+      <br />
+      confiance
+    </h1>
 
-          <div style={styles.buttons}>
-            <button style={styles.btnPrimary}>
-              Découvrir nos produits →
-            </button>
+    <p style={styles.subtitle}>
+      Réactifs, verrerie, produits chimiques et matériel médical.
+      Grand Laboratoire vous accompagne avec excellence depuis
+      plus de 15 ans.
+    </p>
 
-            <button style={styles.btnOutline}>
-              Nous contacter
-            </button>
-          </div>
-        </div>
-      </section>
+    <div style={styles.buttons}>
+      <button style={styles.btnPrimary}>
+        Découvrir nos produits →
+      </button>
+
+      <button style={styles.btnSecondary}>
+        Nous contacter
+      </button>
+    </div>
+  </div>
+</section>
 
       {/* STATS */}
       <section style={styles.statsSection}>
@@ -266,14 +275,99 @@ function Home() {
 }
 
 const styles = {
-  hero: {
-    minHeight: "85vh",
-    background:
-      "linear-gradient(135deg,#5a0013,#85001f,#b0002d)",
-    display: "flex",
-    alignItems: "center",
-    color: "#fff",
-  },
+
+hero: {
+  minHeight: "100vh",
+  paddingTop: "80px",
+  background:
+    "linear-gradient(135deg,#4b0012,#78001d,#a0002a)",
+  display: "flex",
+  alignItems: "center",
+},
+
+overlay: {
+  position: "absolute",
+  inset: 0,
+
+  background: `
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.05) 0%, transparent 25%),
+    radial-gradient(circle at 70% 20%, rgba(255,255,255,0.05) 0%, transparent 25%),
+    radial-gradient(circle at 85% 70%, rgba(255,255,255,0.04) 0%, transparent 25%),
+    radial-gradient(circle at 40% 80%, rgba(255,255,255,0.04) 0%, transparent 25%)
+  `,
+},
+
+heroContent: {
+  position: "relative",
+  zIndex: 2,
+  maxWidth: "1300px",
+  width: "100%",
+  margin: "0 auto",
+  padding: "0 80px",
+  color: "#fff",
+},
+
+badge: {
+  display: "inline-block",
+  padding: "10px 18px",
+  borderRadius: "30px",
+  background: "rgba(255,255,255,0.12)",
+  backdropFilter: "blur(10px)",
+  fontSize: "14px",
+  marginBottom: "30px",
+},
+
+title: {
+  fontSize: "5.5rem",
+  fontWeight: "800",
+  lineHeight: "0.95",
+  marginBottom: "35px",
+  maxWidth: "650px",
+},
+
+titlePink: {
+  color: "#f6a7bb",
+},
+
+subtitle: {
+  maxWidth: "650px",
+  fontSize: "1.5rem",
+  lineHeight: "1.8",
+  color: "#f3f4f6",
+  marginBottom: "40px",
+},
+
+buttons: {
+  display: "flex",
+  gap: "15px",
+},
+
+btnPrimary: {
+  background: "#b3002d",
+  color: "#fff",
+  border: "none",
+  padding: "18px 35px",
+  borderRadius: "12px",
+  fontSize: "18px",
+  fontWeight: "600",
+  cursor: "pointer",
+},
+
+btnSecondary: {
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.3)",
+  color: "#fff",
+  padding: "18px 35px",
+  borderRadius: "12px",
+  fontSize: "18px",
+  fontWeight: "600",
+  cursor: "pointer",
+},
+
+
+
+
+ 
 
   container: {
     maxWidth: "1200px",

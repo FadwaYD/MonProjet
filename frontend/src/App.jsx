@@ -1,7 +1,28 @@
-import Home from "./client/components/Home";
-
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Home from "./client/pages/Home";
+import About from "./client/pages/About";
+import Produits from "./client/pages/Produits";
+import Services from "./client/pages/Services";
+import Contact from "./client/pages/Contact";
+import Connexion from "./client/pages/Connexion";
+import Inscription from "./client/pages/Inscription";
+import DetailProduit from "./client/pages/DetailProduit";
 function App() {
-  return <Home />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/produits" element={<Produits />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/connexion" element={<Connexion />} />
+        <Route path="/inscription" element={<Inscription />} />
+        <Route path="/produit/:id" element={<DetailProduit />}
+/>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;
