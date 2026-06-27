@@ -1,51 +1,195 @@
--- Créer la base de données
-CREATE DATABASE IF NOT EXISTS gestion_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE gestion_db;
+-- =====================================
+-- Création de la base de données
+-- =====================================
+DROP DATABASE IF EXISTS gestion_laboratoire;
+CREATE DATABASE gestion_laboratoire;
+USE gestion_laboratoire;
 
--- Table des clients / utilisateurs
-CREATE TABLE IF NOT EXISTS users (
+-- =====================================
+-- Table utilisateurs
+-- =====================================
+CREATE TABLE utilisateurs (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    ice VARCHAR(50) UNIQUE,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
     nomLabo VARCHAR(150),
+    ville VARCHAR(100),
+    email VARCHAR(150) NOT NULL UNIQUE,
     telephone VARCHAR(20),
-    gmail VARCHAR(255) UNIQUE NOT NULL,
-    codeICE VARCHAR(50),
-    motDePasse VARCHAR(255) NOT NULL,
-    statut TINYINT(1) NOT NULL DEFAULT 0
-    -- statut : 0 = Inactif | 1 = Nouveau | 2 = VIP
+    mot_de_passe VARCHAR(255) NOT NULL,
+    role ENUM('Admin','Client') NOT NULL,
+    message TEXT,
+    statut TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
-
+-- =====================================
 -- Table produits
-CREATE TABLE IF NOT EXISTS produits (
+-- =====================================
+CREATE TABLE produits (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    reference VARCHAR(50) NOT NULL UNIQUE,
-    designation VARCHAR(255) NOT NULL,
-    marque VARCHAR(100) NOT NULL,
+    nom VARCHAR(255) NOT NULL,
+    marque VARCHAR(150) NOT NULL,
+    reference VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    prix DECIMAL(10,2) NOT NULL,
     stock INT NOT NULL DEFAULT 0,
-    date_peremption DATE DEFAULT NULL,
-    statut ENUM('Réactif', 'Consommable', 'Matériel') NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    image VARCHAR(255),
+    statut ENUM('Réactif','Consommable','Matériel') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO users (nom, prenom, nomLabo, telephone, gmail, codeICE, motDePasse, statut) VALUES
-('Alaoui',   'Karim',   'Clinilab Sarl',           '0661234567', 'contact@clinilab.ma',       'ICE-001', 'hashed_pw', 2),
-('Bennani',  'Sara',    'LabTech Maroc',            '0662345678', 'achats@labtech.ma',          'ICE-002', 'hashed_pw', 2),
-('Chraibi',  'Youssef', 'BioMed Diagnostics',       '0663456789', 'info@biomed-dx.ma',          'ICE-003', 'hashed_pw', 1),
-('Daoudi',   'Fatima',  'Clinique Al Amal',         '0664567890', 'direction@alamal-clinique.ma','ICE-004', 'hashed_pw', 2),
-('El Fassi', 'Ahmed',   'Institut Pasteur Casa',    '0665678901', 'logistique@pasteur-casa.ma', 'ICE-005', 'hashed_pw', 1),
-('Fassi',    'Nadia',   'Pharma Plus Distribution', '0666789012', 'commandes@pharmaplus.ma',    'ICE-006', 'hashed_pw', 0);
 
--- Données de démonstration
-INSERT INTO produits (reference, designation, marque, stock, date_peremption, statut) VALUES
-('P-1042', 'Réactif R-204 Buffer pH 7',           'BioMerieux',  8,   '2025-12-31', 'Réactif'),
-('P-1043', 'Bécher borosilicaté 500ml',            'Duran',       64,  NULL,         'Consommable'),
-('P-1044', 'Centrifugeuse de table CF-300',        'Eppendorf',   3,   NULL,         'Matériel'),
-('P-1045', 'Acide chlorhydrique 37% 1L',           'Sigma',       0,   '2026-06-30', 'Réactif'),
-('P-1046', 'Lit médicalisé électrique',            'Stryker',     5,   NULL,         'Matériel'),
-('P-1047', 'Kit réactifs immuno 50 tests',         'Abbott',      12,  '2025-09-15', 'Réactif'),
-('P-1048', 'Pipette graduée 10ml lot de 10',       'Hirschmann',  41,  NULL,         'Consommable'),
-('P-1049', 'Concentrateur oxygène portable',       'Invacare',    2,   NULL,         'Matériel');
--- Données de démonstration
+-- =====================================
+-- Table commandes
+-- =====================================
+CREATE TABLE commandes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    utilisateur_id INT NOT NULL,
+    date_commande DATETIME DEFAULT CURRENT_TIMESTAMP,
+    total DECIMAL(10,2) NOT NULL,
+    statut ENUM('En attente','Confirmée','Annulée') DEFAULT 'En attente',
+
+    CONSTRAINT fk_commande_utilisateur
+        FOREIGN KEY (utilisateur_id)
+        REFERENCES utilisateurs(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+-- =====================================
+-- Table details_commande
+-- =====================================
+CREATE TABLE details_commande (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    commande_id INT NOT NULL,
+    produit_id INT NOT NULL,
+    quantite INT NOT NULL,
+    prix DECIMAL(10,2) NOT NULL,
+
+    CONSTRAINT fk_detail_commande
+        FOREIGN KEY (commande_id)
+        REFERENCES commandes(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_detail_produit
+        FOREIGN KEY (produit_id)
+        REFERENCES produits(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+-- =====================================
+-- Données utilisateurs
+-- =====================================
+INSERT INTO utilisateurs
+(ice, nom, prenom, nomLabo, ville, email, telephone, mot_de_passe, role, message, statut)
+VALUES
+
+('ICE001234567', 'Admin', 'System', NULL, 'Casablanca',
+'admin@gl.ma', '0600000001', 'admin123',
+'Admin', 'Administrateur principal', 1),
+
+('ICE002345678', 'Benali', 'Ahmed', 'Laboratoire Atlas', 'Casablanca',
+'atlas@lab.ma', '0611111111', 'atlas123',
+'Client', 'Demande de partenariat', 1),
+
+('ICE003456789', 'El Idrissi', 'Sara', 'Laboratoire BioTech', 'Rabat',
+'biotech@lab.ma', '0622222222', 'bio123',
+'Client', 'Commande de réactifs', 1),
+
+('ICE004567890', 'Amrani', 'Youssef', NULL, 'Marrakech',
+'youssef@gmail.com', '0633333333', 'client123',
+'Client', 'Besoin de matériel', 1),
+
+('ICE005678901', 'Karimi', 'Nadia', NULL, 'Fès',
+'nadia@gmail.com', '0644444444', 'client456',
+'Client', 'Demande de devis', 0);
+
+-- =====================================
+-- Données produits
+-- =====================================
+INSERT INTO produits
+(nom, marque, reference, description, prix, stock, image, statut)
+VALUES
+
+('Tube à essai 10 ml',
+'Deltalab',
+'REF001',
+'Tube en verre de 10 ml',
+15.00,
+500,
+'tube.jpg',
+'Matériel'),
+
+('Micropipette 1000 µL',
+'Eppendorf',
+'REF002',
+'Micropipette réglable',
+1200.00,
+20,
+'micropipette.jpg',
+'Matériel'),
+
+('Réactif PCR',
+'Thermo Fisher',
+'REF003',
+'Réactif pour PCR',
+450.00,
+100,
+'reactif_pcr.jpg',
+'Réactif'),
+
+('Alcool Isopropylique',
+'Sigma',
+'REF004',
+'Consommable de laboratoire',
+80.00,
+200,
+'alcool.jpg',
+'Consommable'),
+
+('Gants Latex',
+'Ansell',
+'REF005',
+'Boîte de 100 gants',
+45.00,
+150,
+'gants.jpg',
+'Consommable');
+
+-- =====================================
+-- Données commandes
+-- =====================================
+INSERT INTO commandes
+(utilisateur_id, date_commande, total, statut)
+VALUES
+
+(2, '2026-06-25 10:30:00', 1740.00, 'Confirmée'),
+
+(3, '2026-06-26 15:20:00', 900.00, 'En attente'),
+
+(4, '2026-06-27 09:45:00', 285.00, 'Confirmée');
+
+-- =====================================
+-- Données détails des commandes
+-- =====================================
+INSERT INTO details_commande
+(commande_id, produit_id, quantite, prix)
+VALUES
+
+-- Commande 1
+(1, 2, 1, 1200.00),
+(1, 3, 1, 450.00),
+(1, 1, 6, 15.00),
+
+-- Commande 2
+(2, 3, 2, 450.00),
+
+-- Commande 3
+(3, 4, 3, 80.00),
+(3, 5, 1, 45.00);
+
+ALTER TABLE details_commande
+ADD COLUMN remise DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER prix

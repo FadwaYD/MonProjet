@@ -42,11 +42,7 @@ export default function TopNavbar() {
             <span>Espace administration</span>
           </div>
         </Link>
-        <div className="gl-topbar-search">
-          <IconSearch width={16} height={16} />
-          <input type="text" placeholder="Rechercher un produit, client, devis…" />
-          <kbd>Ctrl K</kbd>
-        </div>
+        
       </div>
 
       <div className="gl-topbar-right" ref={ref}>
