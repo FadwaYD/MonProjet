@@ -5,6 +5,17 @@
  *   produits     : id, nom, marque, reference, prix, stock, image, statut …
  *   commandes    : id, utilisateur_id, date_commande, total, statut
  *   details_commande : id, commande_id, produit_id, quantite, prix, remise
+ *
+ * Comportement des 3 boutons du devis :
+ *   - Confirmer        -> PATCH /commandes/:id/confirmer
+ *                          (le backend génère le PDF du devis et l'envoie par email au client,
+ *                           puis passe le statut à "Confirmée")
+ *   - Annuler           -> DELETE /commandes/:id  (suppression définitive de la commande)
+ *   - En attente        -> PATCH /commandes/:id/statut { statut: "En attente" }
+ *
+ * Colonne "Date de péremption" :
+ *   - Affichée uniquement pour les lignes dont le produit a pour statut "Réactif" ou "Consommable"
+ *   - Purement front-end (state React local), AUCUNE persistance en base de données
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
@@ -19,6 +30,9 @@ import {
 // ─── Config ───────────────────────────────────────────────────────────────────
 const API_BASE = "http://localhost:4000/api";
 const STATUTS  = ["Tous", "En attente", "Confirmée", "Annulée"];
+
+// Types de produits pour lesquels la date de péremption a du sens
+const TYPES_AVEC_PEREMPTION = ["Réactif", "Consommable"];
 
 const BADGE_CMD = {
   "En attente": { bg: "#FEF9C3", color: "#854D0E", dot: "#EAB308" },
@@ -273,9 +287,16 @@ export default function QuoteRequests() {
   const [loadDet,       setLoadDet]       = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [actionLoad,    setActionLoad]    = useState(false);
-  const [confirmDel,    setConfirmDel]    = useState(false);
+  const [confirmSendLoad, setConfirmSendLoad] = useState(false);
   const [note,          setNote]          = useState("");
   const [toast,         setToast]         = useState(null);
+
+  // ── Confirmation pour les actions destructives du footer (delete | cancel) ──
+  const [pendingAction, setPendingAction] = useState(null); // null | "delete" | "cancel"
+
+  // ── Dates de péremption : 100% front-end, jamais envoyées/persistées en base ─
+  // Forme : { [ligneId]: "YYYY-MM-DD" }
+  const [datesPeremption, setDatesPeremption] = useState({});
 
   // ── Popover statut tableau global ─────────────────────────────────────────
   const [editPopover, setEditPopover] = useState(null);
@@ -317,7 +338,8 @@ export default function QuoteRequests() {
   // ── Ouvrir modal détail ───────────────────────────────────────────────────
   const ouvrirModal = async (cmd) => {
     setSelected(cmd); setDetail(null);
-    setNote(""); setConfirmDel(false); setEditLigne(null);
+    setNote(""); setPendingAction(null); setEditLigne(null);
+    setDatesPeremption({}); // reset des dates de péremption (front-end uniquement)
     setLoadDet(true);
     try {
       const res  = await fetch(`${API_BASE}/commandes/${cmd.id}`);
@@ -329,10 +351,11 @@ export default function QuoteRequests() {
 
   const fermer = () => {
     setSelected(null); setDetail(null);
-    setNote(""); setConfirmDel(false); setEditLigne(null);
+    setNote(""); setPendingAction(null); setEditLigne(null);
+    setDatesPeremption({});
   };
 
-  // ── Changer statut ────────────────────────────────────────────────────────
+  // ── Changer statut (utilisé pour "En attente") ──────────────────────────────
   const changerStatut = async (id, statut) => {
     setActionLoad(true);
     try {
@@ -346,12 +369,46 @@ export default function QuoteRequests() {
         setCommandes((prev) => prev.map((c) => c.id === id ? { ...c, statut } : c));
         fetchStats();
         if (selected?.id === id) setSelected((s) => ({ ...s, statut }));
-        else fermer();
       } else notif(json.message || "Erreur", "error");
     } catch { notif("Erreur réseau", "error"); }
     finally   { setActionLoad(false); }
   };
 
+  // ── Confirmer le devis : le backend génère le PDF et l'envoie par email ────
+  const confirmerEtEnvoyer = async (id) => {
+    setConfirmSendLoad(true);
+    try {
+      const res  = await fetch(`${API_BASE}/commandes/${id}/confirmer`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        // On transmet les dates de péremption saisies pour qu'elles apparaissent sur le PDF envoyé,
+        // sans jamais les enregistrer en base côté serveur.
+        body: JSON.stringify({ datesPeremption }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        notif("Devis confirmé et envoyé par email au client ✓");
+        setCommandes((prev) => prev.map((c) => c.id === id ? { ...c, statut: "Confirmée" } : c));
+        fetchStats();
+        setSelected((s) => (s ? { ...s, statut: "Confirmée" } : s));
+      } else notif(json.message || "Erreur lors de l'envoi du devis", "error");
+    } catch { notif("Erreur réseau", "error"); }
+    finally   { setConfirmSendLoad(false); }
+  };
+
+  // ── Annuler le devis = suppression définitive de la commande ───────────────
+  const annulerCommande = async (id) => {
+    setActionLoad(true);
+    try {
+      const res  = await fetch(`${API_BASE}/commandes/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) { notif("Devis annulé et supprimé"); fermer(); fetchCommandes(); fetchStats(); }
+      else notif(json.message || "Erreur", "error");
+    } catch { notif("Erreur réseau", "error"); }
+    finally   { setActionLoad(false); }
+  };
+
+  // ── Suppression manuelle (bouton "Supprimer le devis") ──────────────────────
   const supprimer = async (id) => {
     setActionLoad(true);
     try {
@@ -360,10 +417,9 @@ export default function QuoteRequests() {
       if (json.success) { notif("Devis supprimé"); fermer(); fetchCommandes(); fetchStats(); }
       else notif(json.message || "Erreur", "error");
     } catch { notif("Erreur réseau", "error"); }
-    finally   { setActionLoad(false); }
-  };
+    finally   { setActionLoad(false); }  };
 
-  // ── Sauvegarder une ligne du détail ──────────────────────────────────────
+  // ── Sauvegarder une ligne du détail (qté / prix / remise) ───────────────────
   const sauvegarderLigne = async (ligneId) => {
     setSaveLoad(true);
     try {
@@ -555,38 +611,50 @@ export default function QuoteRequests() {
         size="xl"
         footer={
           selected && (
-            !confirmDel ? (
+            pendingAction === null ? (
               <div style={{
                 display: "flex", justifyContent: "space-between", width: "100%",
                 alignItems: "center", gap: 8, padding: "4px 0",
               }}>
-                <Btn variant="red_ghost" disabled={actionLoad} onClick={() => setConfirmDel(true)}>
+                <Btn variant="red_ghost" disabled={actionLoad || confirmSendLoad} onClick={() => setPendingAction("delete")}>
                   <IconX width={13} height={13} /> Supprimer le devis
                 </Btn>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" disabled={actionLoad || selected.statut === "En attente"}
+                  <Btn variant="ghost" disabled={actionLoad || confirmSendLoad || selected.statut === "En attente"}
                     onClick={() => changerStatut(selected.id, "En attente")}>
-                    <IconClock width={13} height={13} /> En attente
+                    <IconClock width={13} height={13} /> {actionLoad ? "…" : "En attente"}
                   </Btn>
-                  <Btn variant="danger" disabled={actionLoad || selected.statut === "Annulée"}
-                    onClick={() => changerStatut(selected.id, "Annulée")}>
-                    <IconX width={13} height={13} /> {actionLoad ? "…" : "Annuler"}
+                  <Btn variant="danger" disabled={actionLoad || confirmSendLoad || selected.statut === "Annulée"}
+                    onClick={() => setPendingAction("cancel")}>
+                    <IconX width={13} height={13} /> Annuler
                   </Btn>
-                  <Btn variant="primary" disabled={actionLoad || selected.statut === "Confirmée"}
-                    onClick={() => changerStatut(selected.id, "Confirmée")}>
-                    <IconCheck width={13} height={13} /> {actionLoad ? "…" : "Confirmer"}
+                  <Btn variant="primary" disabled={actionLoad || confirmSendLoad || selected.statut === "Confirmée"}
+                    onClick={() => confirmerEtEnvoyer(selected.id)}>
+                    <IconCheck width={13} height={13} /> {confirmSendLoad ? "Envoi en cours…" : "Confirmer & envoyer le PDF"}
+                  </Btn>
+                </div>
+              </div>
+            ) : pendingAction === "delete" ? (
+              <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                <span style={{ fontSize: 13.5, color: "#DC2626", fontWeight: 700 }}>
+                  ⚠️ Supprimer définitivement ce devis ?
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="ghost" onClick={() => setPendingAction(null)} disabled={actionLoad}>Annuler</Btn>
+                  <Btn variant="danger" onClick={() => supprimer(selected.id)} disabled={actionLoad}>
+                    {actionLoad ? "Suppression…" : "Oui, supprimer"}
                   </Btn>
                 </div>
               </div>
             ) : (
               <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
                 <span style={{ fontSize: 13.5, color: "#DC2626", fontWeight: 700 }}>
-                  ⚠️ Supprimer définitivement ce devis ?
+                  ⚠️ Annuler ce devis ? La commande sera définitivement supprimée.
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" onClick={() => setConfirmDel(false)} disabled={actionLoad}>Annuler</Btn>
-                  <Btn variant="danger" onClick={() => supprimer(selected.id)} disabled={actionLoad}>
-                    {actionLoad ? "Suppression…" : "Oui, supprimer"}
+                  <Btn variant="ghost" onClick={() => setPendingAction(null)} disabled={actionLoad}>Retour</Btn>
+                  <Btn variant="danger" onClick={() => annulerCommande(selected.id)} disabled={actionLoad}>
+                    {actionLoad ? "Annulation…" : "Oui, annuler"}
                   </Btn>
                 </div>
               </div>
@@ -678,7 +746,7 @@ export default function QuoteRequests() {
                         {[
                           ["Réf.", false], ["Produit", false], ["Marque", false],
                           ["Type", false], ["Qté", true], ["Prix unit.", true],
-                          ["Remise", true], ["Sous-total", true], ["", true],
+                          ["Remise", true], ["Péremption", true], ["Sous-total", true], ["", true],
                         ].map(([h, c], i) => (
                           <th key={i} style={{
                             padding: "11px 14px", textAlign: c ? "center" : "left",
@@ -692,7 +760,7 @@ export default function QuoteRequests() {
                     <tbody>
                       {loadDet ? (
                         <tr>
-                          <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
+                          <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
                             Chargement…
                           </td>
                         </tr>
@@ -733,6 +801,26 @@ export default function QuoteRequests() {
                                   </span>
                                 : <span style={{ color: "#D1D5DB", fontSize: 12 }}>—</span>}
                             </td>
+                            {/* ── Date de péremption : frontend uniquement, jamais persistée en base ── */}
+                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                              {TYPES_AVEC_PEREMPTION.includes(l.produit_type) ? (
+                                <input
+                                  type="date"
+                                  value={datesPeremption[l.id] || ""}
+                                  onChange={(e) =>
+                                    setDatesPeremption((prev) => ({ ...prev, [l.id]: e.target.value }))
+                                  }
+                                  title="Date de péremption (non enregistrée en base — affichage/PDF uniquement)"
+                                  style={{
+                                    padding: "5px 8px", borderRadius: 6,
+                                    border: "1.5px solid #FDE68A", fontSize: 12, fontWeight: 600,
+                                    color: "#92400E", background: "#FFFBEB", outline: "none",
+                                  }}
+                                />
+                              ) : (
+                                <span style={{ color: "#D1D5DB", fontSize: 12 }}>N/A</span>
+                              )}
+                            </td>
                             <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, fontSize: 14, color: "#111827" }}>
                               {fmtMontant(l.sous_total)}
                             </td>
@@ -764,7 +852,7 @@ export default function QuoteRequests() {
                           {/* ── Ligne édition inline ── */}
                           {editLigne?.id === l.id && (
                             <tr>
-                              <td colSpan={9} style={{ padding: 0 }}>
+                              <td colSpan={10} style={{ padding: 0 }}>
                                 <div style={{
                                   background: "linear-gradient(135deg,#EFF6FF,#F0F9FF)",
                                   borderTop: "2px dashed #93C5FD",
@@ -852,7 +940,7 @@ export default function QuoteRequests() {
                         </React.Fragment>
                       )) : (
                         <tr>
-                          <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 13 }}>
+                          <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 13 }}>
                             Aucun produit associé
                           </td>
                         </tr>
@@ -861,7 +949,7 @@ export default function QuoteRequests() {
                     {detail?.lignes?.length > 0 && (
                       <tfoot>
                         <tr style={{ background: "linear-gradient(90deg,#EFF6FF,#DBEAFE)", borderTop: "2px solid #BFDBFE" }}>
-                          <td colSpan={7} style={{ padding: "13px 14px", fontWeight: 800, fontSize: 13, color: "#1E40AF", textAlign: "right" }}>
+                          <td colSpan={8} style={{ padding: "13px 14px", fontWeight: 800, fontSize: 13, color: "#1E40AF", textAlign: "right" }}>
                             Total commande
                           </td>
                           <td colSpan={2} style={{ padding: "13px 14px", textAlign: "center", fontWeight: 900, fontSize: 16, color: "#1D4ED8" }}>
@@ -871,6 +959,9 @@ export default function QuoteRequests() {
                       </tfoot>
                     )}
                   </table>
+                </div>
+                <div style={{ fontSize: 11.5, color: "#9CA3AF", marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>ℹ️</span> Les dates de péremption sont saisies ici à titre indicatif (PDF envoyé au client) et ne sont pas enregistrées en base de données.
                 </div>
               </section>
 

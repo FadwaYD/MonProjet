@@ -1,13 +1,12 @@
 const router = require("express").Router();
-const ctrl   = require("../../controllers/admin/commandeController");
+const commandesController   = require("../../controllers/admin/commandeController");
 
-// ⚠️  Routes spécifiques AVANT les routes paramétrées
-router.get("/stats/resume",       ctrl.getStats);
-router.patch("/lignes/:id",       ctrl.updateLigne);
 
-router.get("/",                   ctrl.getAll);
-router.get("/:id",                ctrl.getOne);
-router.patch("/:id/statut",       ctrl.updateStatut);
-router.delete("/:id",             ctrl.remove);
-
+router.get("/", commandesController.getAll);
+router.get("/stats/resume", commandesController.getStats);
+router.get("/:id", commandesController.getOne);
+router.patch("/lignes/:id", commandesController.updateLigne);
+router.patch("/:id/statut", commandesController.updateStatut);
+router.delete("/:id", commandesController.remove);
+router.patch("/:id/confirmer", commandesController.confirmerEtEnvoyer);
 module.exports = router;
