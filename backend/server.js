@@ -10,14 +10,10 @@ app.use(express.json());
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ─── Routes Admin ─────────────────────────────────────────────────────────────
-app.use("/api/clients",   require("./admin/routes/clientRoutes"));
-app.use("/api/produits",  require("./admin/routes/produitRoutes"));
-app.use("/api/commandes", require("./admin/routes/commandeRoutes"));
-
-// ─── Routes Client ────────────────────────────────────────────────────────────
-// app.use("/api/auth",    require("./client/routes/authRoutes"));   // à brancher
-// app.use("/api/panier",  require("./client/routes/panierRoutes")); // à brancher
+// ─── Routes (admin + client confondus) ───────────────────────────────────────
+app.use("/api/clients",   require("./routes/clientRoutes"));
+app.use("/api/produits",  require("./routes/produitRoutes"));
+app.use("/api/commandes", require("./routes/commandeRoutes"));
 
 // ─── Gestion erreurs Multer ───────────────────────────────────────────────────
 app.use((err, req, res, next) => {

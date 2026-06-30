@@ -1,4 +1,4 @@
-const pool           = require("../../db");
+const pool           = require("../db");
 const { UPLOAD_DIR } = require("../middlewares/upload");
 const fs             = require("fs");
 const path           = require("path");
