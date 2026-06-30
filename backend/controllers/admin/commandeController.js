@@ -1,4 +1,4 @@
-const pool = require("../db");
+const pool = require("../../db");
 
 const STATUTS_VALIDES = ["En attente", "Confirmée", "Annulée"];
 const fail = (res, code, msg) => res.status(code).json({ success: false, message: msg });

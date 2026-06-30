@@ -1,6 +1,6 @@
 const router     = require("express").Router();
-const ctrl       = require("../controllers/produitController");
-const { upload } = require("../middlewares/upload");
+const ctrl       = require("../../controllers/admin/produitController");
+const { upload } = require("../../middlewares/upload");
 
 // ⚠️  /stats AVANT /:id pour éviter le conflit de paramètre
 router.get("/stats",       ctrl.getStats);

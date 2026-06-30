@@ -1,4 +1,4 @@
-const pool = require("../db");
+const pool = require("../../db");
 
 function statutToLabel(statut) {
   return statut === 0 ? "Client" : "En attente";

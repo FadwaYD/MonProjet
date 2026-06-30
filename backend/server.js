@@ -10,10 +10,10 @@ app.use(express.json());
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ─── Routes (admin + client confondus) ───────────────────────────────────────
-app.use("/api/clients",   require("./routes/clientRoutes"));
-app.use("/api/produits",  require("./routes/produitRoutes"));
-app.use("/api/commandes", require("./routes/commandeRoutes"));
+// ─── Routes Admin ─────────────────────────────────────────────────────────────
+app.use("/api/clients",   require("./routes/admin/clientRoutes"));
+app.use("/api/produits",  require("./routes/admin/produitRoutes"));
+app.use("/api/commandes", require("./routes/admin/commandeRoutes"));
 
 // ─── Gestion erreurs Multer ───────────────────────────────────────────────────
 app.use((err, req, res, next) => {

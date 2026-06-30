@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const ctrl   = require("../controllers/commandeController");
+const ctrl   = require("../../controllers/admin/commandeController");
 
 // ⚠️  Routes spécifiques AVANT les routes paramétrées
 router.get("/stats/resume",       ctrl.getStats);
