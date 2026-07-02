@@ -11,7 +11,9 @@ app.use(express.json());
 
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+const notificationRoutes = require("./routes/admin/notificationRoutes");
 
+app.use("/api/admin", notificationRoutes);
 // ─── Routes Admin ─────────────────────────────────────────────────────────────
 app.use("/api/clients",   require("./routes/admin/clientRoutes"));
 app.use("/api/produits",  require("./routes/admin/produitRoutes"));
@@ -24,7 +26,6 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
-
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`✅  API démarrée sur http://localhost:${PORT}`));

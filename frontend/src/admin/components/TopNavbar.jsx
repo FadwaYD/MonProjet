@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import useOutsideClick from "./useOutsideClick";
 import {
@@ -6,18 +6,17 @@ import {
   IconLogout, IconSettings, IconUser,
 } from "./Icons";
 
-const notifications = [
-  { id: 1, who: "FY", text: "Nouvelle demande de devis pour Verrerie de précision.", time: "Il y a 12 min", unread: true },
-  { id: 2, who: "AV", text: "Compte client « Clinilab Sarl » en attente de validation.", time: "Il y a 38 min", unread: true },
-  { id: 3, who: "ST", text: "Stock faible : Réactif R-204 (8 unités restantes).", time: "Il y a 2 h", unread: false },
-  { id: 4, who: "CM", text: "Commande #CMD-1042 marquée comme livrée.", time: "Hier", unread: false },
-];
+const API_URL = "http://localhost:4000";
 
 const messages = [
   { id: 1, who: "Dr. Bensaid", text: "Pouvez-vous m'envoyer le devis mis à jour ?", time: "10:24", unread: true },
   { id: 2, who: "Clinilab Sarl", text: "Merci, commande bien reçue.", time: "09:02", unread: true },
   { id: 3, who: "LabTech Maroc", text: "Disponibilité du matériel de centrifugation ?", time: "Hier", unread: false },
 ];
+
+// Palette de couleurs pour les avatars (cycle selon l'id)
+const AVATAR_COLORS = ["#7C3AED", "#0EA5E9", "#F59E0B", "#EF4444", "#10B981", "#EC4899"];
+const getAvatarColor = (id) => AVATAR_COLORS[id % AVATAR_COLORS.length];
 
 /**
  * Barre de navigation supérieure — reste strictement identique sur
@@ -26,14 +25,49 @@ const messages = [
  */
 export default function TopNavbar() {
   const [openMenu, setOpenMenu] = useState(null); // "notif" | "mail" | "profile" | null
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotif, setLoadingNotif] = useState(true);
   const ref = useOutsideClick(!!openMenu, () => setOpenMenu(null));
 
   const toggle = (name) => setOpenMenu((cur) => (cur === name ? null : name));
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/notifications/latest-clients`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          },
+        });
+        const json = await res.json();
+
+        if (json.success) {
+          const formatted = json.data.map((c) => ({
+            id: c.id,
+            who: (c.nom || "").slice(0, 2).toUpperCase(),
+            text: `Compte client « ${c.nomLabo || `${c.prenom} ${c.nom}`} » en attente de validation.`,
+            time: formatDateTime(c.created_at),
+            unread: true,
+          }));
+          setNotifications(formatted);
+        }
+      } catch (err) {
+        console.error("Erreur chargement notifications:", err);
+      } finally {
+        setLoadingNotif(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
   const unreadNotif = notifications.filter((n) => n.unread).length;
   const unreadMail = messages.filter((m) => m.unread).length;
 
   return (
     <header className="gl-topbar">
+      <style>{notifStyles}</style>
+
       <div className="gl-topbar-left">
         <Link to="/admin" className="gl-brand">
           <div className="gl-brand-mark">GL</div>
@@ -42,7 +76,6 @@ export default function TopNavbar() {
             <span>Espace administration</span>
           </div>
         </Link>
-        
       </div>
 
       <div className="gl-topbar-right" ref={ref}>
@@ -52,7 +85,7 @@ export default function TopNavbar() {
             {unreadMail > 0 && <span className="dot" />}
           </button>
           {openMenu === "mail" && (
-            <div className="gl-popover">
+            <div className="gl-popover gl-popover-wa">
               <div className="gl-popover-head">
                 <h4>Messages</h4>
                 <Link to="/admin/messages" onClick={() => setOpenMenu(null)}>Tout voir</Link>
@@ -60,10 +93,15 @@ export default function TopNavbar() {
               <div className="gl-popover-list">
                 {messages.map((m) => (
                   <div key={m.id} className={`gl-popover-item ${m.unread ? "unread" : ""}`}>
-                    <div className="pic">{m.who.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
+                    <div className="pic" style={{ background: getAvatarColor(m.id) }}>
+                      {m.who.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                    </div>
                     <div className="txt">
-                      <p><strong>{m.who} — </strong>{m.text}</p>
-                      <span>{m.time}</span>
+                      <div className="txt-row">
+                        <strong>{m.who}</strong>
+                        <span className="time">{m.time}</span>
+                      </div>
+                      <p>{m.text}</p>
                     </div>
                   </div>
                 ))}
@@ -78,21 +116,38 @@ export default function TopNavbar() {
             {unreadNotif > 0 && <span className="dot" />}
           </button>
           {openMenu === "notif" && (
-            <div className="gl-popover">
+            <div className="gl-popover gl-popover-wa">
               <div className="gl-popover-head">
-                <h4>Notifications</h4>
-                <a href="#" onClick={(e) => e.preventDefault()}>Tout marquer comme lu</a>
+                <h4>
+                  Notifications
+                  {unreadNotif > 0 && <span className="count-badge">{unreadNotif}</span>}
+                </h4>
               </div>
               <div className="gl-popover-list">
-                {notifications.map((n) => (
-                  <div key={n.id} className={`gl-popover-item ${n.unread ? "unread" : ""}`}>
-                    <div className="pic">{n.who}</div>
-                    <div className="txt">
-                      <p>{n.text}</p>
-                      <span>{n.time}</span>
-                    </div>
+                {loadingNotif ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Chargement…</p>
                   </div>
-                ))}
+                ) : notifications.length === 0 ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Aucune nouvelle demande client.</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div key={n.id} className={`gl-popover-item ${n.unread ? "unread" : ""}`}>
+                      <div className="pic" style={{ background: getAvatarColor(n.id) }}>
+                        {n.who}
+                      </div>
+                      <div className="txt">
+                        <div className="txt-row">
+                          <strong>Nouveau client</strong>
+                          <span className="time">{n.time}</span>
+                        </div>
+                        <p>{n.text}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -122,3 +177,130 @@ export default function TopNavbar() {
     </header>
   );
 }
+
+/**
+ * Formate une date SQL en "JJ/MM/AAAA à HH:MM"
+ * Toujours la date complète + l'heure, sans nom de jour ni "Hier".
+ */
+function formatDateTime(dateString) {
+  const date = new Date(dateString);
+
+  const day = date.toLocaleDateString("fr-FR"); // "27/06/2026"
+  const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); // "18:13"
+
+  return `${day} à ${time}`;
+}
+
+const notifStyles = `
+.gl-popover-wa {
+  width: 340px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  border: 1px solid #eee;
+}
+.gl-popover-wa .gl-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #7a1f2b;
+  color: #fff;
+}
+.gl-popover-wa .gl-popover-head h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gl-popover-wa .gl-popover-head a {
+  color: #f3d9dc;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.gl-popover-wa .gl-popover-head a:hover {
+  text-decoration: underline;
+}
+.count-badge {
+  background: #fff;
+  color: #7a1f2b;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.gl-popover-wa .gl-popover-list {
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fff;
+}
+.gl-popover-wa .gl-popover-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f2f2f2;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.gl-popover-wa .gl-popover-item:hover {
+  background: #faf5f5;
+}
+.gl-popover-wa .gl-popover-item.unread {
+  background: #fdf3f1;
+}
+.gl-popover-wa .gl-popover-item .pic {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.gl-popover-wa .txt {
+  flex: 1;
+  min-width: 0;
+}
+.gl-popover-wa .txt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gl-popover-wa .txt-row strong {
+  font-size: 13.5px;
+  color: #222;
+}
+.gl-popover-wa .txt .time {
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.gl-popover-wa .txt p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #666;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gl-popover-empty {
+  justify-content: center;
+  padding: 24px 16px !important;
+}
+.gl-popover-empty p {
+  color: #999 !important;
+  text-align: center;
+  width: 100%;
+}
+`;
