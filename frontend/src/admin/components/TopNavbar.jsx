@@ -8,12 +8,6 @@ import {
 
 const API_URL = "http://localhost:4000";
 
-const messages = [
-  { id: 1, who: "Dr. Bensaid", text: "Pouvez-vous m'envoyer le devis mis à jour ?", time: "10:24", unread: true },
-  { id: 2, who: "Clinilab Sarl", text: "Merci, commande bien reçue.", time: "09:02", unread: true },
-  { id: 3, who: "LabTech Maroc", text: "Disponibilité du matériel de centrifugation ?", time: "Hier", unread: false },
-];
-
 // Palette de couleurs pour les avatars (cycle selon l'id)
 const AVATAR_COLORS = ["#7C3AED", "#0EA5E9", "#F59E0B", "#EF4444", "#10B981", "#EC4899"];
 const getAvatarColor = (id) => AVATAR_COLORS[id % AVATAR_COLORS.length];
@@ -27,6 +21,8 @@ export default function TopNavbar() {
   const [openMenu, setOpenMenu] = useState(null); // "notif" | "mail" | "profile" | null
   const [notifications, setNotifications] = useState([]);
   const [loadingNotif, setLoadingNotif] = useState(true);
+  const [messages, setMessages] = useState([]);
+  const [loadingMail, setLoadingMail] = useState(true);
   const ref = useOutsideClick(!!openMenu, () => setOpenMenu(null));
 
   const toggle = (name) => setOpenMenu((cur) => (cur === name ? null : name));
@@ -58,7 +54,34 @@ export default function TopNavbar() {
       }
     };
 
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/contacts/latest`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          },
+        });
+        const json = await res.json();
+
+        if (json.success) {
+          const formatted = json.data.map((c) => ({
+            id: c.id,
+            who: c.nom,
+            text: `${c.sujet} — ${c.message}`,
+            time: formatDateTime(c.created_at),
+            unread: c.statut === "Nouveau",
+          }));
+          setMessages(formatted);
+        }
+      } catch (err) {
+        console.error("Erreur chargement messages:", err);
+      } finally {
+        setLoadingMail(false);
+      }
+    };
+
     fetchNotifications();
+    fetchMessages();
   }, []);
 
   const unreadNotif = notifications.filter((n) => n.unread).length;
@@ -87,24 +110,41 @@ export default function TopNavbar() {
           {openMenu === "mail" && (
             <div className="gl-popover gl-popover-wa">
               <div className="gl-popover-head">
-                <h4>Messages</h4>
-                <Link to="/admin/messages" onClick={() => setOpenMenu(null)}>Tout voir</Link>
+                <h4>
+                  Messages
+                  {unreadMail > 0 && <span className="count-badge">{unreadMail}</span>}
+                </h4>
               </div>
               <div className="gl-popover-list">
-                {messages.map((m) => (
-                  <div key={m.id} className={`gl-popover-item ${m.unread ? "unread" : ""}`}>
-                    <div className="pic" style={{ background: getAvatarColor(m.id) }}>
-                      {m.who.split(" ").map((w) => w[0]).join("").slice(0, 2)}
-                    </div>
-                    <div className="txt">
-                      <div className="txt-row">
-                        <strong>{m.who}</strong>
-                        <span className="time">{m.time}</span>
-                      </div>
-                      <p>{m.text}</p>
-                    </div>
+                {loadingMail ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Chargement…</p>
                   </div>
-                ))}
+                ) : messages.length === 0 ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Aucun message pour le moment.</p>
+                  </div>
+                ) : (
+                  messages.map((m) => (
+                    <Link
+                      key={m.id}
+                      to="/admin/messages"
+                      onClick={() => setOpenMenu(null)}
+                      className={`gl-popover-item ${m.unread ? "unread" : ""}`}
+                    >
+                      <div className="pic" style={{ background: getAvatarColor(m.id) }}>
+                        {m.who.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="txt">
+                        <div className="txt-row">
+                          <strong>{m.who}</strong>
+                          <span className="time">{m.time}</span>
+                        </div>
+                        <p>{m.text}</p>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -180,14 +220,11 @@ export default function TopNavbar() {
 
 /**
  * Formate une date SQL en "JJ/MM/AAAA à HH:MM"
- * Toujours la date complète + l'heure, sans nom de jour ni "Hier".
  */
 function formatDateTime(dateString) {
   const date = new Date(dateString);
-
-  const day = date.toLocaleDateString("fr-FR"); // "27/06/2026"
-  const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); // "18:13"
-
+  const day = date.toLocaleDateString("fr-FR");
+  const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   return `${day} à ${time}`;
 }
 
@@ -245,6 +282,8 @@ const notifStyles = `
   border-bottom: 1px solid #f2f2f2;
   cursor: pointer;
   transition: background 0.15s ease;
+  text-decoration: none;
+  color: inherit;
 }
 .gl-popover-wa .gl-popover-item:hover {
   background: #faf5f5;

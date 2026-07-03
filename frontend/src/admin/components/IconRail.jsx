@@ -8,9 +8,7 @@ import {
 export const RAIL_ITEMS = [
   { to: "/admin", label: "Tableau de bord", icon: IconDashboard, end: true },
   { to: "/admin/produits", label: "Produits", icon: IconBox },
-  { to: "/admin/categories", label: "Catégories", icon: IconTag },
   { to: "/admin/devis", label: "Demandes de devis", icon: IconFile },
-  { to: "/admin/commandes", label: "Commandes", icon: IconCart },
   { to: "/admin/clients", label: "Clients", icon: IconUsers },
   { to: "/admin/messages", label: "Messages", icon: IconMessage },
   { to: "/admin/rapports", label: "Rapports", icon: IconChart },

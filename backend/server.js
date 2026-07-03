@@ -18,7 +18,13 @@ app.use("/api/admin", notificationRoutes);
 app.use("/api/clients",   require("./routes/admin/clientRoutes"));
 app.use("/api/produits",  require("./routes/admin/produitRoutes"));
 app.use("/api/commandes", require("./routes/admin/commandeRoutes"));
+const contactRoutes = require("./routes/admin/contactRoutes");
 
+const dashboardRoutes = require("./routes/admin/dashboardRoutes");
+
+app.use("/api/admin", dashboardRoutes);
+
+app.use("/api/admin", contactRoutes);
 // ─── Gestion erreurs Multer ───────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes("images")) {
