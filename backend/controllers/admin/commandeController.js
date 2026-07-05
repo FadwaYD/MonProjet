@@ -1,9 +1,14 @@
+const fs           = require("fs");
+const path         = require("path");
 const pool         = require("../../db");
 const PDFDocument  = require("pdfkit");
 const nodemailer   = require("nodemailer");
 
 const STATUTS_VALIDES = ["En attente", "Confirmée", "Annulée"];
 const fail = (res, code, msg) => res.status(code).json({ success: false, message: msg });
+
+// ─── Emplacement du logo (à côté de ce fichier ; changez si besoin) ────────────
+const LOGO_PATH = path.join(__dirname, "logo.png");
 
 // ─── Transporteur email (à configurer via .env) ────────────────────────────────
 // SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SMTP_FROM
@@ -17,81 +22,398 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ─── Génère le PDF du devis en mémoire (Buffer) ────────────────────────────────
+// ─── Palette noir / blanc, façon devis papier classique ────────────────────────
+const C = {
+  ink:    "#000000",
+  gray:   "#4A4A4A",
+  light:  "#F4F4F4",
+  line:   "#000000",
+};
+
+const TYPES_AVEC_PEREMPTION = ["Réactif", "Consommable"];
+
+// ─── Infos de l'émetteur (à ajuster selon le labo) ─────────────────────────────
+const EMETTEUR = {
+  nom: "GRAND LABORATOIRE",
+  adresse: "Résidence Oum El Koraa, Rue de lille, RDC N° 46",
+  telephone: "0522 44 17 83",
+  telephone2: "0661 51 46 73",
+  fax: "0522 30 88 55",
+  ville: "Casablanca",
+  capital: "800 000,00 Dhs",
+  rc: "73377",
+  patente: "32503929",
+  if: "01621471",
+  cnss: "2350487",
+  banque: "AttijariWafa Bank Agence Dakar Casa",
+  rib: "007.780.0000.105000001314 58",
+  ice: "000527835000083",
+};
+
+// ─── Référence du devis, format D + année (2 chiffres) + n° sur 6 chiffres ─────
+const refDevis = (id) => {
+  const annee = new Date().getFullYear().toString().slice(-2);
+  return `D${annee}${String(id).padStart(6, "0")}`;
+};
+
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "—";
+const fmtDateCourte = (d) =>
+  d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+const fmtMontant = (v) =>
+  v == null ? "—" : Number(v).toLocaleString("fr-MA", { minimumFractionDigits: 2 });
+const fullName = (nom, prenom) => [prenom, nom].filter(Boolean).join(" ") || "—";
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+// ─── Conversion d'un montant en toutes lettres (français), pour la mention
+//     "Arrêtée le présent Devis à la somme de : ... Dirham, ... Centimes" ──────
+function nombreEnLettres(n) {
+  const unites = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix",
+    "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
+  const dizainesMots = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"];
+
+  function moinsDeCent(nb) {
+    if (nb < 20) return unites[nb];
+    const d = Math.floor(nb / 10);
+    const u = nb % 10;
+    if (d === 7 || d === 9) {
+      // 70-79 : "soixante et onze" (seule exception avec "et"), sinon soixante-douze, -treize...
+      // 90-99 : quatre-vingt-dix, quatre-vingt-onze... (jamais de "et")
+      if (d === 7 && u === 1) return "soixante et onze";
+      return dizainesMots[d] + "-" + unites[10 + u];
+    }
+    if (d === 8) {
+      return u === 0 ? "quatre-vingts" : "quatre-vingt-" + unites[u];
+    }
+    if (u === 0) return dizainesMots[d];
+    if (u === 1) return dizainesMots[d] + " et un";
+    return dizainesMots[d] + "-" + unites[u];
+  }
+
+  function moinsDeMille(nb) {
+    if (nb === 0) return "";
+    const centaines = Math.floor(nb / 100);
+    const reste = nb % 100;
+    let mots = "";
+    if (centaines > 0) {
+      mots += (centaines > 1 ? unites[centaines] + " cent" : "cent") + (centaines > 1 && reste === 0 ? "s" : "");
+      if (reste > 0) mots += " ";
+    }
+    if (reste > 0) mots += moinsDeCent(reste);
+    return mots;
+  }
+
+  if (n === 0) return "zéro";
+
+  let mots = "";
+  const millions = Math.floor(n / 1000000);
+  const milliers = Math.floor((n % 1000000) / 1000);
+  const reste = n % 1000;
+
+  if (millions > 0) mots += (millions > 1 ? moinsDeMille(millions) + " millions " : "un million ");
+  if (milliers > 0) mots += (milliers > 1 ? moinsDeMille(milliers) + " mille " : "mille ");
+  if (reste > 0) mots += moinsDeMille(reste);
+
+  return mots.trim();
+}
+
+function montantEnLettres(montant) {
+  const entier = Math.floor(Math.round(montant * 100) / 100);
+  const centimes = Math.round((montant - entier) * 100);
+  const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  let texte = capitalize(nombreEnLettres(entier)) + " Dirham";
+  texte += centimes > 0 ? `, ${capitalize(nombreEnLettres(centimes))} Centimes` : ", Zéro Centime";
+  return texte;
+}
+
+// ─── Génère le PDF stylé du devis en mémoire (Buffer) — reproduit la mise en
+//     page papier classique (cadres, tableau grillagé, totaux, montant en
+//     lettres, mentions légales) — tenu sur UNE seule page, la hauteur des
+//     lignes s'ajuste automatiquement au nombre de produits. ──────────────────
+// cmd    : { id, date_commande, total, statut, client_nom, client_prenom, client_email,
+//            client_telephone, laboratoire, client_ville, client_ice, utilisateur_id }
+// lignes : [{ id, quantite, prix_unitaire, remise, produit_nom, produit_marque,
+//             produit_reference, produit_type }]
 // datesPeremption : { [ligneId]: 'YYYY-MM-DD' } — fourni par le front, jamais lu/écrit en base
 function genererPdfDevis(cmd, lignes, datesPeremption = {}) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const chunks = [];
-    doc.on("data", (c) => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
+    try {
+      const doc = new PDFDocument({ size: "A4", margin: 36, autoFirstPage: true });
+      const chunks = [];
+      doc.on("data", (c) => chunks.push(c));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
 
-    const ref = `CMD-${String(cmd.id).padStart(4, "0")}`;
+      const pageWidth  = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const pageHeight = doc.page.height - doc.page.margins.top - doc.page.margins.bottom;
+      const left = doc.page.margins.left;
 
-    // ── En-tête ──
-    doc.fontSize(20).fillColor("#1E3A8A").text("Devis", { align: "right" });
-    doc.fontSize(10).fillColor("#6B7280")
-      .text(ref, { align: "right" })
-      .text(new Date(cmd.date_commande).toLocaleDateString("fr-FR"), { align: "right" });
-    doc.moveDown(1.5);
+      // Recalcul du sous-total HT par ligne
+      const lignesCalc = lignes.map((l) => ({
+        ...l,
+        sous_total: Math.round(l.quantite * l.prix_unitaire * (1 - (Number(l.remise) || 0) / 100) * 100) / 100,
+      }));
 
-    // ── Infos client ──
-    doc.fontSize(12).fillColor("#111827").text("Client :", { underline: true });
-    doc.fontSize(10).fillColor("#374151")
-      .text(`${cmd.client_prenom} ${cmd.client_nom}`)
-      .text(cmd.laboratoire || "")
-      .text(cmd.client_email)
-      .text(cmd.client_telephone || "")
-      .text(cmd.client_ville || "");
-    doc.moveDown(1.5);
+      const totalHT  = Math.round(lignesCalc.reduce((s, l) => s + l.sous_total, 0) * 100) / 100;
+      const tauxTVA  = 20;
+      const totalTVA = Math.round(totalHT * (tauxTVA / 100) * 100) / 100;
+      const totalTTC = Math.round((totalHT + totalTVA) * 100) / 100;
 
-    // ── Tableau produits ──
-    const colX = { ref: 50, nom: 110, qte: 300, prix: 345, remise: 405, perem: 455 };
-    let y = doc.y;
-    doc.fontSize(9).fillColor("#1E40AF");
-    doc.text("Réf.", colX.ref, y);
-    doc.text("Produit", colX.nom, y);
-    doc.text("Qté", colX.qte, y);
-    doc.text("P.U.", colX.prix, y);
-    doc.text("Remise", colX.remise, y);
-    doc.text("Péremption", colX.perem, y);
-    doc.moveDown();
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#BFDBFE").stroke();
-    doc.moveDown(0.5);
+      const CM = 28.35; // 1 cm en points, pour un espacement précis
 
-    lignes.forEach((l) => {
-      const rowY = doc.y;
-      const peremption = datesPeremption[l.id]
-        ? new Date(datesPeremption[l.id]).toLocaleDateString("fr-FR")
-        : "—";
-      doc.fontSize(9).fillColor("#374151");
-      doc.text(l.produit_reference, colX.ref, rowY, { width: 55 });
-      doc.text(l.produit_nom, colX.nom, rowY, { width: 185 });
-      doc.text(String(l.quantite), colX.qte, rowY);
-      doc.text(`${Number(l.prix_unitaire).toFixed(2)} MAD`, colX.prix, rowY);
-      doc.text(`${Number(l.remise) || 0}%`, colX.remise, rowY);
-      doc.text(peremption, colX.perem, rowY);
-      doc.moveDown();
+      const HEADER_H       = 100; // + d'espace entre la date d'émission et la ligne de séparation
+      const GAP_1          = 26;  // décale les cartes un peu plus bas sous le header
+      const INFO_H         = 84;
+      const GAP_2          = 2 * CM; // 2 cm fixes entre les cartes et le tableau
+      const TABLE_HEADER_H = 22;
+      const GAP_3          = 10;
+      const TOTAL_H        = 34;
+      const GAP_4          = 10;
+      const LETTRES_H      = 30;
+      const GAP_5          = 14;
+      const FOOTER_H       = 48;
+
+      // Bloc fixe du haut (logo/titre + cadres devis/objet/client)
+      const topBlockH = HEADER_H + GAP_1 + INFO_H;
+      // Le footer est ancré en bas de page, quel que soit le contenu au-dessus
+      const footerY = pageHeight - FOOTER_H;
+
+      // Le tableau démarre à un point fixe : 2 cm sous les cartes (GAP_2).
+      // On centre ensuite verticalement le reste (tableau + totaux + montant
+      // en lettres) dans l'espace restant jusqu'au footer.
+      const middleTop       = topBlockH + GAP_2;
+      const middleAvailable = Math.max(footerY - GAP_5 - middleTop, 0);
+      const fixedMiddleH    = TABLE_HEADER_H + GAP_3 + TOTAL_H + GAP_4 + LETTRES_H;
+      const availableForRows = Math.max(middleAvailable - fixedMiddleH, 60);
+
+      const rowH = lignesCalc.length > 0 ? clamp(availableForRows / lignesCalc.length, 16, 34) : 24;
+      const rowFont = rowH < 20 ? 7.5 : rowH < 26 ? 8.5 : 9.5;
+
+      let y = 0;
+      y = drawHeader(doc, cmd, left, pageWidth, HEADER_H);
+      y += GAP_1;
+      y = drawInfoBlock(doc, cmd, left, pageWidth, y, INFO_H);
+      y += GAP_2; // 2 cm fixes avant le tableau
+      y = drawProductsTable(doc, lignesCalc, datesPeremption, left, pageWidth, y, rowH, rowFont, TABLE_HEADER_H);
+      y += GAP_3;
+      y = drawTotal(doc, { totalHT, tauxTVA, totalTVA, totalTTC }, left, pageWidth, y, TOTAL_H);
+      y += GAP_4;
+      drawMontantLettres(doc, totalTTC, left, pageWidth, y, LETTRES_H);
+
+      // Footer toujours collé en bas de la page
+      drawFooterNote(doc, left, pageWidth, footerY);
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// ─── En-tête : logo + nom du labo en grand, date d'émission en haut à droite ──
+function drawHeader(doc, cmd, left, pageWidth, h) {
+  const logoSize = 62;
+  const logoX = left, logoY = 4;
+
+  if (fs.existsSync(LOGO_PATH)) {
+    doc.image(LOGO_PATH, logoX, logoY, { width: logoSize, height: logoSize });
+  } else {
+    doc.lineWidth(3).circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2).stroke(C.ink);
+    doc.font("Helvetica-Bold").fontSize(26).fillColor(C.ink)
+      .text("GL", logoX, logoY + logoSize / 2 - 14, { width: logoSize, align: "center" });
+  }
+
+  doc.font("Helvetica-Bold").fontSize(30).fillColor(C.ink)
+    .text(EMETTEUR.nom, logoX + logoSize + 16, logoY + 14, { characterSpacing: 0.5 });
+
+  doc.font("Helvetica").fontSize(9).fillColor(C.ink)
+    .text(`${EMETTEUR.ville} le  ${fmtDateCourte(new Date())}`, left, logoY + logoSize + 6, {
+      width: pageWidth, align: "right",
     });
 
-    doc.moveDown(0.5);
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#BFDBFE").stroke();
-    doc.moveDown(0.5);
-    doc.fontSize(12).fillColor("#1D4ED8")
-      .text(`Total : ${Number(cmd.total).toFixed(2)} MAD`, { align: "right" });
+  doc.moveTo(left, h).lineTo(left + pageWidth, h).lineWidth(1).stroke(C.line);
+  return h;
+}
 
-    doc.end();
+// ─── Bloc "DEVIS N° / Objet" à gauche, bloc client à droite, dans des cadres ──
+function drawInfoBlock(doc, cmd, left, pageWidth, startY, h) {
+  const leftColW = pageWidth * 0.42;
+  const gap = 14;
+  const rightColW = pageWidth - leftColW - gap;
+  const rightX = left + leftColW + gap;
+
+  // Cadre "DEVIS N°"
+  const devisH = 30;
+  doc.roundedRect(left, startY, leftColW, devisH, 4).lineWidth(1).stroke(C.ink);
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(C.ink)
+    .text("DEVIS N° :", left + 14, startY + 10);
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(C.ink)
+    .text(refDevis(cmd.id), left, startY + 10, { width: leftColW - 14, align: "right" });
+
+  // Cadre "Objet"
+  const objetY = startY + devisH + 10;
+  const objetH = h - devisH - 10;
+  doc.roundedRect(left, objetY, leftColW, objetH, 4).lineWidth(1).stroke(C.ink);
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(C.ink)
+    .text("Objet :", left + 14, objetY + 10);
+  doc.font("Helvetica").fontSize(9).fillColor(C.ink)
+    .text(cmd.objet || "", left + 70, objetY + 10, { width: leftColW - 84 });
+
+  // Cadre client (à droite, sur toute la hauteur)
+  doc.roundedRect(rightX, startY, rightColW, h, 4).lineWidth(1).stroke(C.ink);
+  let cy = startY + 10;
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink)
+    .text(`Code Client N° : ${cmd.utilisateur_id ?? "—"}`, rightX, cy, { width: rightColW, align: "center" });
+  cy += 14;
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(C.ink)
+    .text((cmd.laboratoire || fullName(cmd.client_nom, cmd.client_prenom)).toUpperCase(), rightX, cy, {
+      width: rightColW, align: "center",
+    });
+  cy += 13;
+  if (cmd.client_ville && cmd.client_ville !== (cmd.laboratoire || "")) {
+    doc.font("Helvetica").fontSize(9).fillColor(C.ink)
+      .text(cmd.client_ville.toUpperCase(), rightX, cy, { width: rightColW, align: "center" });
+    cy += 13;
+  }
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink)
+    .text((cmd.client_ville || "").toUpperCase(), rightX, startY + h - 16, { width: rightColW, align: "center" });
+
+  return startY + h;
+}
+
+// ─── Tableau des produits, grillagé (cadres sur chaque cellule) ───────────────
+function drawProductsTable(doc, lignes, datesPeremption, left, pageWidth, startY, rowH, rowFont, headerH) {
+  const cols = [
+    { key: "ref", label: "Référence", w: 0.15 },
+    { key: "produit", label: "Désignation", w: 0.37 },
+    { key: "qte", label: "Qté", w: 0.08, align: "center" },
+    { key: "prix", label: "P.U HT", w: 0.13, align: "right" },
+    { key: "remise", label: "R%", w: 0.09, align: "center" },
+    { key: "total", label: "Montant HT", w: 0.18, align: "right" },
+  ].map((c) => ({ ...c, w: c.w * pageWidth }));
+
+  let y = startY;
+  const tableBottom0 = y;
+
+  // En-tête
+  doc.lineWidth(1).rect(left, y, pageWidth, headerH).stroke(C.ink);
+  let x = left;
+  cols.forEach((c) => {
+    if (x > left) doc.moveTo(x, y).lineTo(x, y + headerH).lineWidth(1).stroke(C.ink);
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink)
+      .text(c.label, x + 6, y + 6, { width: c.w - 12, align: c.align || "left" });
+    x += c.w;
+  });
+  y += headerH;
+
+  lignes.forEach((l) => {
+    x = left;
+    const cellY = y + Math.max((rowH - rowFont) / 2 - 1, 3);
+
+    doc.rect(left, y, pageWidth, rowH).lineWidth(0.75).stroke(C.ink);
+    cols.forEach((c) => {
+      if (x > left) doc.moveTo(x, y).lineTo(x, y + rowH).lineWidth(0.5).stroke(C.ink);
+      x += c.w;
+    });
+
+    x = left;
+    doc.font("Courier").fontSize(rowFont - 0.5).fillColor(C.ink)
+      .text(l.produit_reference || "—", x + 6, cellY, { width: cols[0].w - 12, ellipsis: true });
+    x += cols[0].w;
+
+    const ddp = TYPES_AVEC_PEREMPTION.includes(l.produit_type) && datesPeremption[l.id]
+      ? `   ${fmtDateCourte(datesPeremption[l.id])}` : "";
+    doc.font("Helvetica").fontSize(rowFont).fillColor(C.ink)
+      .text(`${l.produit_nom || "—"}${ddp}`, x + 6, cellY, { width: cols[1].w - 12, ellipsis: true });
+    x += cols[1].w;
+
+    doc.font("Helvetica").fontSize(rowFont).fillColor(C.ink)
+      .text(String(l.quantite), x, cellY, { width: cols[2].w, align: "center" });
+    x += cols[2].w;
+
+    doc.font("Helvetica").fontSize(rowFont).fillColor(C.ink)
+      .text(fmtMontant(l.prix_unitaire), x, cellY, { width: cols[3].w - 8, align: "right" });
+    x += cols[3].w;
+
+    doc.font("Helvetica").fontSize(rowFont).fillColor(C.ink)
+      .text(Number(l.remise) > 0 ? `${l.remise}%` : "", x, cellY, { width: cols[4].w, align: "center" });
+    x += cols[4].w;
+
+    doc.font("Helvetica-Bold").fontSize(rowFont).fillColor(C.ink)
+      .text(fmtMontant(l.sous_total), x, cellY, { width: cols[5].w - 8, align: "right" });
+
+    y += rowH;
+  });
+
+  // Contour extérieur du tableau
+  doc.rect(left, tableBottom0, pageWidth, y - tableBottom0).lineWidth(1).stroke(C.ink);
+
+  return y;
+}
+
+// ─── Ligne de totaux : H.T / TVA / Mt TVA / Total TTC ─────────────────────────
+function drawTotal(doc, totaux, left, pageWidth, startY, h) {
+  const cols = [
+    { label: "H.T", value: fmtMontant(totaux.totalHT) },
+    { label: "TVA", value: `${totaux.tauxTVA.toFixed(2)}%` },
+    { label: "Mt TVA", value: fmtMontant(totaux.totalTVA) },
+    { label: "Total TTC", value: `${fmtMontant(totaux.totalTTC)} MAD` },
+  ];
+  const colW = pageWidth / cols.length;
+  const headerH = h / 2;
+
+  doc.rect(left, startY, pageWidth, h).lineWidth(1).stroke(C.ink);
+  doc.moveTo(left, startY + headerH).lineTo(left + pageWidth, startY + headerH).lineWidth(1).stroke(C.ink);
+
+  cols.forEach((c, i) => {
+    const x = left + i * colW;
+    if (i > 0) doc.moveTo(x, startY).lineTo(x, startY + h).lineWidth(1).stroke(C.ink);
+
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink)
+      .text(c.label, x, startY + 6, { width: colW, align: "center" });
+    doc.font(i === cols.length - 1 ? "Helvetica-Bold" : "Helvetica").fontSize(i === cols.length - 1 ? 11 : 9.5)
+      .fillColor(C.ink)
+      .text(c.value, x, startY + headerH + 6, { width: colW, align: "center" });
+  });
+
+  return startY + h;
+}
+
+// ─── Mention "Arrêtée le présent Devis à la somme de : ..." ───────────────────
+function drawMontantLettres(doc, totalTTC, left, pageWidth, startY, h) {
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink)
+    .text(`Arrêtée le présent Devis à la somme de : ${montantEnLettres(totalTTC)}`, left, startY, {
+      width: pageWidth,
+    });
+  return startY + h;
+}
+
+// ─── Pied de page : mentions légales du laboratoire ────────────────────────────
+function drawFooterNote(doc, left, pageWidth, y) {
+  doc.moveTo(left, y).lineTo(left + pageWidth, y).lineWidth(0.75).stroke(C.ink);
+  y += 8;
+
+  const lignesFooter = [
+    `${EMETTEUR.adresse} - Tel: ${EMETTEUR.telephone} - ${EMETTEUR.telephone2} - Fax: ${EMETTEUR.fax} ${EMETTEUR.ville}`,
+    `S.A.R.L Au Capital de ${EMETTEUR.capital} - RC : ${EMETTEUR.rc} - Patente : ${EMETTEUR.patente} - IF : ${EMETTEUR.if} - CNSS : ${EMETTEUR.cnss}`,
+    `Cpte Bancaire ${EMETTEUR.banque} ${EMETTEUR.rib}`,
+    `ICE N° : ${EMETTEUR.ice}`,
+  ];
+
+  lignesFooter.forEach((ligne) => {
+    doc.font("Helvetica").fontSize(7).fillColor(C.gray)
+      .text(ligne, left, y, { width: pageWidth, align: "center" });
+    y += 9;
   });
 }
 
 // ─── Envoie le PDF par email au client ─────────────────────────────────────────
 async function envoyerEmailDevis(destinataire, cmd, pdfBuffer) {
-  const ref = `CMD-${String(cmd.id).padStart(4, "0")}`;
+  const ref = refDevis(cmd.id);
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
     to: destinataire,
-    subject: `Votre devis ${ref} est confirmé`,
+    subject: `Votre devis ${ref} — Grand Laboratoire`,
     text:
       `Bonjour ${cmd.client_prenom},\n\n` +
       `Votre devis ${ref} a bien été confirmé. Vous trouverez le détail en pièce jointe (PDF).\n\n` +
@@ -246,11 +568,9 @@ exports.create = async (req, res) => {
   if (!Array.isArray(lignes) || lignes.length === 0)
     return fail(res, 400, "La commande doit contenir au moins une ligne (lignes[])");
 
-  // ── Vérification de l'accès du client ──
   const acces = await clientPeutCommander(utilisateur_id);
   if (!acces.autorise) return fail(res, acces.code, acces.raison);
 
-  // ── Validation des lignes ──
   for (const l of lignes) {
     const qte    = Number(l.quantite);
     const prix   = Number(l.prix);
@@ -364,9 +684,10 @@ exports.updateStatut = async (req, res) => {
 };
 
 // PATCH /api/commandes/:id/confirmer
-// Génère le PDF du devis (avec les dates de péremption transmises par le front,
-// jamais persistées en base), l'envoie par email au client, puis passe le
-// statut de la commande à "Confirmée".
+// Génère le PDF stylé du devis (mise en page façon facture papier, une seule
+// page) avec les dates de péremption transmises par le front (jamais
+// persistées en base), l'envoie par email au client, puis passe le statut
+// à "Confirmée".
 exports.confirmerEtEnvoyer = async (req, res) => {
   try {
     const id = req.params.id;

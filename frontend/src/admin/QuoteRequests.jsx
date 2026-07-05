@@ -6,16 +6,41 @@
  *   commandes    : id, utilisateur_id, date_commande, total, statut
  *   details_commande : id, commande_id, produit_id, quantite, prix, remise
  *
- * Comportement des 3 boutons du devis :
+ * Comportement des boutons du devis :
  *   - Confirmer        -> PATCH /commandes/:id/confirmer
  *                          (le backend génère le PDF du devis et l'envoie par email au client,
  *                           puis passe le statut à "Confirmée")
- *   - Annuler           -> DELETE /commandes/:id  (suppression définitive de la commande)
+ *   - Supprimer         -> DELETE /commandes/:id  (suppression définitive de la commande)
  *   - En attente        -> PATCH /commandes/:id/statut { statut: "En attente" }
  *
  * Colonne "Date de péremption" :
  *   - Affichée uniquement pour les lignes dont le produit a pour statut "Réactif" ou "Consommable"
  *   - Purement front-end (state React local), AUCUNE persistance en base de données
+ *
+ * ── Design ─────────────────────────────────────────────────────────────────
+ * Identité visuelle inspirée du monde du laboratoire : palette "paillasse"
+ * (pétrole / papier chaud / ambre bouchon-de-tube), typographie technique
+ * (Space Grotesk + Inter + IBM Plex Mono), et une étiquette-échantillon
+ * ("RefTag") comme élément signature pour les références de commande.
+ *
+ * MODIF (compact) :
+ *   - Tableau global resserré pour tenir sur un seul écran.
+ *   - Popup de détail réduite en taille (size "lg" au lieu de "xl"), paddings
+ *     et espacements resserrés pour tout voir sur un seul écran.
+ *   - Bouton "Annuler" (à côté de "Confirmer") supprimé du footer.
+ *   - Nouvelle barre d'édition compacte (une seule ligne) pour modifier
+ *     qté / prix / remise d'un produit, à la place de l'ancien encart en
+ *     pointillés.
+ *   - Bouton "Exporter CSV" retiré.
+ *   - AJOUT : bouton "copier la référence" sur le RefTag du header (copie
+ *     CMD-XXXX dans le presse-papier) + badge "N articles" dans le header
+ *     pour un aperçu rapide sans scroller vers le tableau produits.
+ *   - FIX : le tableau "Produits commandés" utilise maintenant tableLayout
+ *     fixed + colgroup avec largeurs en %, et son conteneur a overflowX:auto
+ *     avec une largeur minimale, pour que TOUTES les colonnes (y compris le
+ *     bouton crayon ✎ tout à droite) restent accessibles et ne soient plus
+ *     coupées hors de l'écran.
+ * Aucune logique métier n'a été modifiée par ailleurs.
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
@@ -23,7 +48,7 @@ import AdminLayout from "./components/AdminLayout";
 import PageHead    from "./components/PageHead";
 import Modal       from "./components/Modal";
 import {
-  IconFile, IconClock, IconCheck, IconX, IconDownload,
+  IconFile, IconClock, IconCheck, IconX,
   IconBuilding, IconCalendar,
 } from "./components/Icons";
 
@@ -34,18 +59,57 @@ const STATUTS  = ["Tous", "En attente", "Confirmée", "Annulée"];
 // Types de produits pour lesquels la date de péremption a du sens
 const TYPES_AVEC_PEREMPTION = ["Réactif", "Consommable"];
 
-const BADGE_CMD = {
-  "En attente": { bg: "#FEF9C3", color: "#854D0E", dot: "#EAB308" },
-  Confirmée:   { bg: "#DCFCE7", color: "#14532D", dot: "#22C55E" },
-  Annulée:     { bg: "#FEE2E2", color: "#7F1D1D", dot: "#EF4444" },
-  Expédiée:   { bg: "#DBEAFE", color: "#1E3A8A", dot: "#3B82F6" },
-  Livrée:     { bg: "#F3F4F6", color: "#374151", dot: "#9CA3AF" },
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
+const FONT_BODY     = "'Inter', -apple-system, sans-serif";
+const FONT_MONO     = "'IBM Plex Mono', 'SFMono-Regular', monospace";
+
+const C = {
+  ink:        "#14231F",
+  inkSoft:    "#425048",
+  paper:      "#F6F4EF",
+  paperSoft:  "#FBFAF7",
+  white:      "#FFFFFF",
+  petrol:     "#0E5C57",
+  petrolDark: "#0A4744",
+  petrolSoft: "#E3EFED",
+  petrolLine: "#BFDAD6",
+  clay:       "#B8763A",
+  claySoft:   "#FAEEE0",
+  clayLine:   "#EAD0AE",
+  sage:       "#6B7D74",
+  sageSoft:   "#EBEFEA",
+  sageLine:   "#D3DCD6",
+  success:    "#3A7D5C",
+  successSoft:"#E3F0E9",
+  successLine:"#B9DAC7",
+  danger:     "#A8433D",
+  dangerSoft: "#F7E7E5",
+  dangerLine: "#E6BEB9",
+  line:       "#E4E0D5",
+  lineSoft:   "#EDEAE1",
+  muted:      "#9C9585",
 };
 
+const GOOGLE_FONTS_IMPORT =
+  "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');";
+
+// Statut de commande -> couleur (chaque statut du workflow a sa propre teinte)
+const BADGE_CMD = {
+  "En attente": { bg: C.claySoft,    color: "#8A5423", dot: C.clay },
+  Confirmée:    { bg: C.successSoft, color: "#265E43", dot: C.success },
+  Annulée:      { bg: C.dangerSoft,  color: "#7E322D", dot: C.danger },
+  Expédiée:     { bg: C.petrolSoft,  color: "#0A4744", dot: C.petrol },
+  Livrée:       { bg: C.sageSoft,    color: "#4B5951", dot: C.sage },
+};
+
+// Type de produit -> couleur (calquée sur les codes-couleurs réels des bouchons
+// de tubes/flacons de laboratoire : réactif = pétrole, consommable = ambre,
+// matériel = sauge neutre)
 const BADGE_PROD = {
-  Réactif:    { bg: "#EDE9FE", color: "#4C1D95", dot: "#8B5CF6" },
-  Consommable: { bg: "#FEF3C7", color: "#78350F", dot: "#F59E0B" },
-  Matériel:   { bg: "#E0F2FE", color: "#0C4A6E", dot: "#0EA5E9" },
+  Réactif:     { bg: C.petrolSoft, color: "#0A4744", dot: C.petrol },
+  Consommable: { bg: C.claySoft,   color: "#8A5423", dot: C.clay },
+  Matériel:    { bg: C.sageSoft,   color: "#4B5951", dot: C.sage },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,14 +120,6 @@ const fmtMontant = (v) =>
   v == null ? "—" : Number(v).toLocaleString("fr-MA", { minimumFractionDigits: 2 }) + " MAD";
 
 const fullName = (nom, prenom) => [prenom, nom].filter(Boolean).join(" ") || "—";
-
-// ─── Style input réutilisable ─────────────────────────────────────────────────
-const inputStyle = (borderColor, textColor, bg = "#fff") => ({
-  width: "100%", padding: "8px 11px", borderRadius: 8,
-  border: `1.5px solid ${borderColor}`, fontSize: 13, fontWeight: 700,
-  color: textColor, outline: "none", textAlign: "center",
-  background: bg, boxSizing: "border-box",
-});
 
 // ─── Icône crayon inline ──────────────────────────────────────────────────────
 function IconEdit({ size = 14 }) {
@@ -76,15 +132,65 @@ function IconEdit({ size = 14 }) {
   );
 }
 
+// ─── Icône copier inline ──────────────────────────────────────────────────────
+function IconCopy({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+// ─── Étiquette-échantillon (élément signature) ───────────────────────────────
+// Rappelle une étiquette de tube de laboratoire : un mini repère à rainures
+// suivi de la référence en monospace. Utilisé pour chaque CMD-XXXX.
+function RefTag({ id, tone = C.petrol, size = "md" }) {
+  const big = size === "lg";
+  const xs  = size === "xs";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: big ? 9 : xs ? 4 : 7,
+      fontFamily: FONT_MONO, fontWeight: 600,
+      fontSize: big ? 18 : xs ? 11 : 12.5, letterSpacing: ".03em",
+      color: big ? C.white : tone,
+      background: big ? "rgba(255,255,255,.14)" : `${tone}14`,
+      border: big ? "1px solid rgba(255,255,255,.28)" : `1px solid ${tone}33`,
+      borderRadius: xs ? 6 : 7,
+      padding: big ? "5px 12px 5px 9px" : xs ? "2px 7px 2px 5px" : "3px 10px 3px 7px",
+      whiteSpace: "nowrap",
+    }}>
+      <span style={{ display: "flex", gap: xs ? 1 : 1.5, alignItems: "center" }}>
+        {[3, 5, 2, 4].map((h, i) => (
+          <span key={i} style={{
+            width: big ? 2 : 1.5, height: big ? h + 3 : xs ? Math.max(h - 1, 2) : h + 2,
+            background: big ? "rgba(255,255,255,.65)" : tone, opacity: .8,
+            borderRadius: 1,
+          }} />
+        ))}
+      </span>
+      CMD-{String(id).padStart(4, "0")}
+    </span>
+  );
+}
+
 // ─── Titre de section ─────────────────────────────────────────────────────────
 function SectionTitle({ icon, label, right }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-      paddingBottom: 8, borderBottom: "2px solid #EEF2FF",
+      display: "flex", alignItems: "center", gap: 8, marginBottom: 9,
+      paddingBottom: 7, borderBottom: `2px solid ${C.lineSoft}`,
     }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ fontSize: 14, fontWeight: 800, color: "#1E3A8A" }}>{label}</span>
+      <span style={{
+        fontSize: 12, width: 22, height: 22, borderRadius: 6,
+        background: C.petrolSoft, color: C.petrolDark,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>{icon}</span>
+      <span style={{
+        fontSize: 12.5, fontWeight: 700, color: C.ink, fontFamily: FONT_DISPLAY,
+        textTransform: "uppercase", letterSpacing: ".04em",
+      }}>{label}</span>
       {right && <span style={{ marginLeft: "auto" }}>{right}</span>}
     </div>
   );
@@ -92,114 +198,21 @@ function SectionTitle({ icon, label, right }) {
 
 // ─── Valeur vide ─────────────────────────────────────────────────────────────
 function Dash() {
-  return <span style={{ color: "#D1D5DB", fontSize: 12 }}>Non renseigné</span>;
-}
-
-// ─── Wrapper champ d'édition ─────────────────────────────────────────────────
-function EditField({ label, width, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5, width }}>
-      <label style={{
-        fontSize: 10.5, fontWeight: 800, color: "#6B7280",
-        textTransform: "uppercase", letterSpacing: ".07em",
-      }}>
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-// ─── Mini-modal statut (dropdown inline dans tableau global) ──────────────────
-function StatutPopover({ commande, onClose, onSave, anchorRef }) {
-  const [statut,  setStatut]  = useState(commande.statut);
-  const [loading, setLoading] = useState(false);
-  const popRef = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (
-        popRef.current && !popRef.current.contains(e.target) &&
-        anchorRef.current && !anchorRef.current.contains(e.target)
-      ) onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose, anchorRef]);
-
-  const sauvegarder = async () => {
-    if (statut === commande.statut) { onClose(); return; }
-    setLoading(true);
-    await onSave(commande.id, statut);
-    setLoading(false);
-    onClose();
-  };
-
-  const OPTS = ["En attente", "Confirmée", "Annulée"];
-  const COLORS = {
-    "En attente": { bg: "#FEF9C3", color: "#854D0E", dot: "#EAB308" },
-    Confirmée:   { bg: "#DCFCE7", color: "#14532D", dot: "#22C55E" },
-    Annulée:     { bg: "#FEE2E2", color: "#7F1D1D", dot: "#EF4444" },
-  };
-
-  return (
-    <div ref={popRef} style={{
-      position: "absolute", zIndex: 999, top: "calc(100% + 6px)", right: 0,
-      background: "#fff", borderRadius: 12, padding: "14px 16px",
-      boxShadow: "0 8px 32px rgba(37,99,235,.15), 0 2px 8px rgba(0,0,0,.08)",
-      border: "1px solid #DBEAFE", minWidth: 220,
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 10 }}>
-        Modifier le statut
-      </div>
-      <div style={{ fontSize: 11.5, color: "#9CA3AF", marginBottom: 12, fontWeight: 600 }}>
-        CMD-{String(commande.id).padStart(4, "0")}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-        {OPTS.map((opt) => {
-          const s = COLORS[opt];
-          const active = statut === opt;
-          return (
-            <button key={opt} onClick={() => setStatut(opt)} style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 10px", borderRadius: 8, cursor: "pointer",
-              border: active ? `2px solid ${s.dot}` : "2px solid transparent",
-              background: active ? s.bg : "#F9FAFB",
-              fontWeight: active ? 700 : 500, fontSize: 13,
-              color: active ? s.color : "#374151", transition: "all .12s",
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
-              {opt}
-              {active && <span style={{ marginLeft: "auto", fontSize: 12, color: s.dot }}>✓</span>}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 7 }}>
-        <button onClick={onClose} style={{
-          flex: 1, padding: "7px 0", borderRadius: 7, fontSize: 12.5, fontWeight: 600,
-          border: "1.5px solid #E5E7EB", background: "#fff", color: "#6B7280", cursor: "pointer",
-        }}>Annuler</button>
-        <button onClick={sauvegarder} disabled={loading} style={{
-          flex: 1, padding: "7px 0", borderRadius: 7, fontSize: 12.5, fontWeight: 700,
-          border: "none", background: loading ? "#93C5FD" : "#2563EB",
-          color: "#fff", cursor: loading ? "not-allowed" : "pointer", transition: "background .12s",
-        }}>{loading ? "…" : "Enregistrer"}</button>
-      </div>
-    </div>
-  );
+  return <span style={{ color: C.muted, fontSize: 12, fontStyle: "italic" }}>Non renseigné</span>;
 }
 
 // ─── UI atoms ─────────────────────────────────────────────────────────────────
-function Badge({ label, map }) {
-  const s = map[label] || { bg: "#F3F4F6", color: "#6B7280", dot: "#9CA3AF" };
+function Badge({ label, map, size = "md" }) {
+  const s = map[label] || { bg: C.sageSoft, color: C.inkSoft, dot: C.muted };
+  const sm = size === "sm";
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700,
-      background: s.bg, color: s.color, whiteSpace: "nowrap",
+      display: "inline-flex", alignItems: "center", gap: sm ? 4 : 5,
+      padding: sm ? "2px 8px" : "3px 10px", borderRadius: 999,
+      fontSize: sm ? 10.5 : 11.5, fontWeight: 700,
+      fontFamily: FONT_BODY, background: s.bg, color: s.color, whiteSpace: "nowrap",
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
+      <span style={{ width: sm ? 5 : 6, height: sm ? 5 : 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
       {label}
     </span>
   );
@@ -207,18 +220,19 @@ function Badge({ label, map }) {
 
 function Btn({ variant = "ghost", onClick, disabled, children, style = {} }) {
   const vars = {
-    primary:   { background: "#2563EB", color: "#fff", border: "none" },
-    danger:    { background: "#EF4444", color: "#fff", border: "none" },
-    ghost:     { background: "#fff",    color: "#374151", border: "1.5px solid #E5E7EB" },
-    red_ghost: { background: "#FFF5F5", color: "#DC2626", border: "1.5px solid #FECACA" },
-    warning:   { background: "#F59E0B", color: "#fff",    border: "none" },
+    primary:   { background: C.petrol, color: C.white, border: "none" },
+    danger:    { background: C.danger, color: C.white, border: "none" },
+    ghost:     { background: C.white,  color: C.inkSoft, border: `1.5px solid ${C.line}` },
+    red_ghost: { background: C.dangerSoft, color: C.danger, border: `1.5px solid ${C.dangerLine}` },
+    warning:   { background: C.clay,   color: C.white, border: "none" },
   };
   return (
     <button onClick={onClick} disabled={disabled} style={{
       display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "7px 15px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .42 : 1,
-      transition: "opacity .12s", ...vars[variant], ...style,
+      padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+      fontFamily: FONT_BODY, cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? .45 : 1, transition: "opacity .12s, transform .12s",
+      ...vars[variant], ...style,
     }}>
       {children}
     </button>
@@ -227,12 +241,13 @@ function Btn({ variant = "ghost", onClick, disabled, children, style = {} }) {
 
 function Toast({ toast }) {
   if (!toast) return null;
-  const bg = { success: "#10B981", error: "#EF4444", info: "#F59E0B" }[toast.type] || "#6B7280";
+  const bg = { success: C.petrolDark, error: C.danger, info: C.clay }[toast.type] || C.inkSoft;
   return (
     <div style={{
       position: "fixed", bottom: 28, right: 28, zIndex: 9999,
-      background: bg, color: "#fff", padding: "12px 22px", borderRadius: 10,
-      fontWeight: 700, fontSize: 13.5, boxShadow: "0 8px 32px rgba(0,0,0,.18)",
+      background: bg, color: C.white, padding: "12px 22px", borderRadius: 10,
+      fontWeight: 700, fontSize: 13.5, fontFamily: FONT_BODY,
+      boxShadow: "0 10px 34px rgba(0,0,0,.2)",
       display: "flex", alignItems: "center", gap: 10, animation: "toastIn .22s ease",
     }}>
       {toast.type === "success" ? "✓" : "✕"} {toast.message}
@@ -244,21 +259,27 @@ function Toast({ toast }) {
 function InfoCard({ icon, label, value }) {
   return (
     <div style={{
-      background: "#F8FAFF", borderRadius: 10, padding: "12px 14px",
-      display: "flex", gap: 11, alignItems: "flex-start", border: "1px solid #EEF2FF",
+      background: C.paperSoft, borderRadius: 9, padding: "8px 11px",
+      display: "flex", gap: 9, alignItems: "flex-start", border: `1px solid ${C.line}`,
     }}>
       <div style={{
-        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-        background: "#EFF6FF", color: "#2563EB",
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+        background: C.petrolSoft, color: C.petrolDark,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13,
       }}>
         {icon}
       </div>
-      <div>
-        <div style={{ fontSize: 10.5, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontSize: 9.5, color: C.muted, fontWeight: 700, fontFamily: FONT_BODY,
+          textTransform: "uppercase", letterSpacing: ".07em",
+        }}>
           {label}
         </div>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827", marginTop: 3 }}>
+        <div style={{
+          fontSize: 12.5, fontWeight: 700, color: C.ink, marginTop: 2, fontFamily: FONT_BODY,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
           {value}
         </div>
       </div>
@@ -266,12 +287,13 @@ function InfoCard({ icon, label, value }) {
   );
 }
 
-const TH = ({ children, center }) => (
+const TH = ({ children, center, width }) => (
   <th style={{
-    padding: "10px 13px", textAlign: center ? "center" : "left",
-    fontSize: 10.5, fontWeight: 700, color: "#6B7280",
+    padding: "8px 8px", textAlign: center ? "center" : "left",
+    fontSize: 9.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY,
     textTransform: "uppercase", letterSpacing: ".06em",
-    borderBottom: "1.5px solid #F3F4F6", whiteSpace: "nowrap",
+    borderBottom: `1.5px solid ${C.line}`, whiteSpace: "nowrap",
+    width: width || "auto",
   }}>
     {children}
   </th>
@@ -291,16 +313,12 @@ export default function QuoteRequests() {
   const [note,          setNote]          = useState("");
   const [toast,         setToast]         = useState(null);
 
-  // ── Confirmation pour les actions destructives du footer (delete | cancel) ──
-  const [pendingAction, setPendingAction] = useState(null); // null | "delete" | "cancel"
+  // ── Confirmation pour l'action destructive du footer (suppression du devis) ─
+  const [pendingAction, setPendingAction] = useState(null); // null | "delete"
 
   // ── Dates de péremption : 100% front-end, jamais envoyées/persistées en base ─
   // Forme : { [ligneId]: "YYYY-MM-DD" }
   const [datesPeremption, setDatesPeremption] = useState({});
-
-  // ── Popover statut tableau global ─────────────────────────────────────────
-  const [editPopover, setEditPopover] = useState(null);
-  const editBtnRef = useRef(null);
 
   // ── Edition ligne dans le popup détail ────────────────────────────────────
   const [editLigne, setEditLigne] = useState(null);
@@ -309,6 +327,17 @@ export default function QuoteRequests() {
   const notif = (message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3200);
+  };
+
+  // ── Copier la référence du devis dans le presse-papier ──────────────────────
+  const copierReference = async (id) => {
+    const ref = `CMD-${String(id).padStart(4, "0")}`;
+    try {
+      await navigator.clipboard.writeText(ref);
+      notif(`Référence ${ref} copiée`);
+    } catch {
+      notif("Impossible de copier la référence", "error");
+    }
   };
 
   // ── Fetch liste ───────────────────────────────────────────────────────────
@@ -396,18 +425,6 @@ export default function QuoteRequests() {
     finally   { setConfirmSendLoad(false); }
   };
 
-  // ── Annuler le devis = suppression définitive de la commande ───────────────
-  const annulerCommande = async (id) => {
-    setActionLoad(true);
-    try {
-      const res  = await fetch(`${API_BASE}/commandes/${id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (json.success) { notif("Devis annulé et supprimé"); fermer(); fetchCommandes(); fetchStats(); }
-      else notif(json.message || "Erreur", "error");
-    } catch { notif("Erreur réseau", "error"); }
-    finally   { setActionLoad(false); }
-  };
-
   // ── Suppression manuelle (bouton "Supprimer le devis") ──────────────────────
   const supprimer = async (id) => {
     setActionLoad(true);
@@ -417,7 +434,8 @@ export default function QuoteRequests() {
       if (json.success) { notif("Devis supprimé"); fermer(); fetchCommandes(); fetchStats(); }
       else notif(json.message || "Erreur", "error");
     } catch { notif("Erreur réseau", "error"); }
-    finally   { setActionLoad(false); }  };
+    finally   { setActionLoad(false); }
+  };
 
   // ── Sauvegarder une ligne du détail (qté / prix / remise) ───────────────────
   const sauvegarderLigne = async (ligneId) => {
@@ -448,25 +466,6 @@ export default function QuoteRequests() {
     finally   { setSaveLoad(false); }
   };
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
-  const exporterCSV = () => {
-    const cols = ["Référence","Prénom","Nom","Laboratoire","ICE","Email","Téléphone","Produits","Nb articles","Total","Date","Statut"];
-    const rows = commandes.map((c) => [
-      `CMD-${String(c.id).padStart(4,"0")}`,
-      c.client_prenom, c.client_nom, c.laboratoire || "—",
-      c.client_ice || "—", c.client_email, c.client_telephone || "—",
-      `"${c.produits_resume || "—"}"`,
-      c.nb_produits, c.total, fmtDate(c.date_commande), c.statut,
-    ]);
-    const csv  = [cols, ...rows].map((r) => r.join(";")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    Object.assign(document.createElement("a"), {
-      href: url, download: `devis_${new Date().toISOString().slice(0,10)}.csv`,
-    }).click();
-    URL.revokeObjectURL(url);
-  };
-
   // ── Sidebar ───────────────────────────────────────────────────────────────
   const ICONS = { Tous: IconFile, "En attente": IconClock, Confirmée: IconCheck, Annulée: IconX };
   const sidebar = {
@@ -486,509 +485,564 @@ export default function QuoteRequests() {
   // ───────────────────────────────────────────────────────────────────────────
   return (
     <AdminLayout sidebar={sidebar}>
-      <Toast toast={toast} />
+      <style>{GOOGLE_FONTS_IMPORT}</style>
+      <div style={{ fontFamily: FONT_BODY, color: C.ink }}>
+        <Toast toast={toast} />
 
-      <PageHead
-        crumb={<>Admin&nbsp;/&nbsp;<b>Demandes de devis</b></>}
-        title="Demandes de devis"
-        description="Consultez, confirmez ou annulez les commandes passées par vos clients."
-        actions={
-          <Btn variant="ghost" onClick={exporterCSV}>
-            <IconDownload width={14} height={14} /> Exporter CSV
-          </Btn>
-        }
-      />
+        <PageHead
+          crumb={<>Admin&nbsp;/&nbsp;<b>Demandes de devis</b></>}
+          title="Demandes de devis"
+          description="Consultez, confirmez ou annulez les commandes passées par vos clients."
+        />
 
-      {/* ═══════════════════════ TABLEAU GLOBAL ═══════════════════════ */}
-      <div style={{
-        background: "#fff", borderRadius: 16, overflow: "hidden",
-        border: "1px solid #EEF2FF",
-        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 8px 24px rgba(37,99,235,.06)",
-      }}>
-        {/* Toolbar */}
+        {/* ═══════════════════════ TABLEAU GLOBAL (compact) ═══════════════════════ */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-          padding: "14px 20px", borderBottom: "1px solid #F0F4FF",
-          background: "linear-gradient(135deg,#F8FAFF,#EFF6FF)",
+          background: C.white, borderRadius: 14, overflow: "hidden",
+          border: `1px solid ${C.line}`,
+          boxShadow: "0 1px 3px rgba(20,35,31,.04), 0 10px 28px rgba(14,92,87,.06)",
         }}>
-          <span style={{ fontSize: 18 }}>📋</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#1E3A8A" }}>Devis clients</span>
-          <select value={filtre} onChange={(e) => setFiltre(e.target.value)} style={{
-            padding: "6px 28px 6px 11px", borderRadius: 8,
-            border: "1.5px solid #BFDBFE", fontSize: 13, fontWeight: 600,
-            color: "#1E40AF", background: "#fff", cursor: "pointer", outline: "none",
+          {/* Toolbar */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            padding: "10px 16px", borderBottom: `1px solid ${C.lineSoft}`,
+            background: `linear-gradient(135deg, ${C.paperSoft}, ${C.petrolSoft})`,
           }}>
-            {STATUTS.map((s) => <option key={s}>{s}</option>)}
-          </select>
-          {loading && <span style={{ fontSize: 12, color: "#93C5FD", fontWeight: 600 }}>Chargement…</span>}
-          <span style={{
-            marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "#2563EB",
-            background: "#EFF6FF", padding: "4px 12px", borderRadius: 999, border: "1px solid #BFDBFE",
-          }}>
-            {commandes.length} devis
-          </span>
-        </div>
-
-        {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-            <thead style={{ background: "#FAFBFF" }}>
-              <tr>
-                <TH>Référence</TH>
-                <TH>Client</TH>
-                <TH>Laboratoire</TH>
-                <TH>Ville</TH>
-                <TH>Date</TH>
-                <TH>Statut</TH>
-                <TH center>Actions</TH>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && commandes.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "60px 0", color: "#9CA3AF" }}>
-                    <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 4 }}>Aucun devis trouvé</div>
-                    <div style={{ fontSize: 13 }}>Essayez un autre filtre.</div>
-                  </td>
-                </tr>
-              ) : commandes.map((c, idx) => (
-                <tr key={c.id}
-                  onClick={() => ouvrirModal(c)}
-                  style={{ cursor: "pointer", borderBottom: idx < commandes.length - 1 ? "1px solid #F9FAFB" : "none", transition: "background .1s" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#F5F8FF"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                >
-                  <td style={{ padding: "14px 13px" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: 12.5, fontWeight: 800, color: "#2563EB", background: "#EFF6FF", padding: "3px 8px", borderRadius: 6 }}>
-                      CMD-{String(c.id).padStart(4, "0")}
-                    </span>
-                  </td>
-                  <td style={{ padding: "14px 13px" }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5, color: "#111827" }}>{fullName(c.client_nom, c.client_prenom)}</div>
-                    <div style={{ fontSize: 11.5, color: "#9CA3AF", marginTop: 1 }}>{c.client_email}</div>
-                  </td>
-                  <td style={{ padding: "14px 13px" }}>
-                    {c.laboratoire
-                      ? <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                          <span style={{ fontSize: 14 }}>🏥</span> {c.laboratoire}
-                        </div>
-                      : <span style={{ color: "#D1D5DB", fontSize: 12 }}>—</span>}
-                  </td>
-                  <td style={{ padding: "14px 13px" }}>
-                    <Badge label={c.client_ville} map={BADGE_CMD} />
-                  </td>
-                  <td style={{ padding: "14px 13px", fontSize: 13, color: "#6B7280", whiteSpace: "nowrap" }}>
-                    {fmtDate(c.date_commande)}
-                  </td>
-                  <td style={{ padding: "14px 13px" }}>
-                    <Badge label={c.statut} map={BADGE_CMD} />
-                  </td>
-                  <td style={{ padding: "14px 13px" }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); ouvrirModal(c); }}
-                        style={{
-                          padding: "5px 13px", borderRadius: 7,
-                          border: "1.5px solid #BFDBFE", background: "#EFF6FF",
-                          fontSize: 12.5, fontWeight: 700, color: "#1D4ED8", cursor: "pointer",
-                        }}
-                      >Détails</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ═══════════════════════ MODAL DÉTAIL ═══════════════════════ */}
-      <Modal
-        open={!!selected}
-        onClose={fermer}
-        title=""
-        size="xl"
-        footer={
-          selected && (
-            pendingAction === null ? (
-              <div style={{
-                display: "flex", justifyContent: "space-between", width: "100%",
-                alignItems: "center", gap: 8, padding: "4px 0",
-              }}>
-                <Btn variant="red_ghost" disabled={actionLoad || confirmSendLoad} onClick={() => setPendingAction("delete")}>
-                  <IconX width={13} height={13} /> Supprimer le devis
-                </Btn>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" disabled={actionLoad || confirmSendLoad || selected.statut === "En attente"}
-                    onClick={() => changerStatut(selected.id, "En attente")}>
-                    <IconClock width={13} height={13} /> {actionLoad ? "…" : "En attente"}
-                  </Btn>
-                  <Btn variant="danger" disabled={actionLoad || confirmSendLoad || selected.statut === "Annulée"}
-                    onClick={() => setPendingAction("cancel")}>
-                    <IconX width={13} height={13} /> Annuler
-                  </Btn>
-                  <Btn variant="primary" disabled={actionLoad || confirmSendLoad || selected.statut === "Confirmée"}
-                    onClick={() => confirmerEtEnvoyer(selected.id)}>
-                    <IconCheck width={13} height={13} /> {confirmSendLoad ? "Envoi en cours…" : "Confirmer & envoyer le PDF"}
-                  </Btn>
-                </div>
-              </div>
-            ) : pendingAction === "delete" ? (
-              <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
-                <span style={{ fontSize: 13.5, color: "#DC2626", fontWeight: 700 }}>
-                  ⚠️ Supprimer définitivement ce devis ?
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" onClick={() => setPendingAction(null)} disabled={actionLoad}>Annuler</Btn>
-                  <Btn variant="danger" onClick={() => supprimer(selected.id)} disabled={actionLoad}>
-                    {actionLoad ? "Suppression…" : "Oui, supprimer"}
-                  </Btn>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
-                <span style={{ fontSize: 13.5, color: "#DC2626", fontWeight: 700 }}>
-                  ⚠️ Annuler ce devis ? La commande sera définitivement supprimée.
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" onClick={() => setPendingAction(null)} disabled={actionLoad}>Retour</Btn>
-                  <Btn variant="danger" onClick={() => annulerCommande(selected.id)} disabled={actionLoad}>
-                    {actionLoad ? "Annulation…" : "Oui, annuler"}
-                  </Btn>
-                </div>
-              </div>
-            )
-          )
-        }
-      >
-        {selected && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-
-            {/* ══ HEADER INTERNE ══ */}
-            <div style={{
-              background: "linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)",
-              borderRadius: "12px 12px 0 0",
-              padding: "24px 28px 20px",
-              display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+            <span style={{
+              width: 26, height: 26, borderRadius: 7, background: C.petrol, color: C.white,
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+            }}>📋</span>
+            <span style={{
+              fontSize: 13, fontWeight: 700, color: C.petrolDark, fontFamily: FONT_DISPLAY,
+              letterSpacing: ".01em",
+            }}>Devis clients</span>
+            <select value={filtre} onChange={(e) => setFiltre(e.target.value)} style={{
+              padding: "5px 24px 5px 9px", borderRadius: 7,
+              border: `1.5px solid ${C.petrolLine}`, fontSize: 12, fontWeight: 600,
+              fontFamily: FONT_BODY, color: C.petrolDark, background: C.white,
+              cursor: "pointer", outline: "none",
             }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  <span style={{
-                    fontFamily: "monospace", fontSize: 22, fontWeight: 900, color: "#fff",
-                    letterSpacing: ".04em",
-                  }}>
-                    CMD-{String(selected.id).padStart(4, "0")}
-                  </span>
-                  <Badge label={selected.statut} map={BADGE_CMD} />
-                </div>
-                <div style={{ fontSize: 13, color: "#93C5FD", display: "flex", gap: 16 }}>
-                  <span>📅 Reçu le {fmtDate(selected.date_commande)}</span>
-                  <span>👤 {fullName(selected.client_nom, selected.client_prenom)}</span>
-                  <span>🏥 {selected.laboratoire || "—"}</span>
-                </div>
-              </div>
-              <div style={{
-                textAlign: "right", background: "rgba(255,255,255,.12)",
-                borderRadius: 12, padding: "10px 18px",
-              }}>
-                <div style={{ fontSize: 11, color: "#BFDBFE", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em" }}>
-                  Total commande
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginTop: 2 }}>
-                  {fmtMontant(selected.total)}
-                </div>
-              </div>
-            </div>
+              {STATUTS.map((s) => <option key={s}>{s}</option>)}
+            </select>
+            {loading && <span style={{ fontSize: 11.5, color: C.petrol, fontWeight: 600 }}>Chargement…</span>}
+            <span style={{
+              marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.petrolDark,
+              fontFamily: FONT_MONO, background: C.white, padding: "3px 10px",
+              borderRadius: 999, border: `1px solid ${C.petrolLine}`,
+            }}>
+              {commandes.length} devis
+            </span>
+          </div>
 
-            {/* ══ BODY ══ */}
-            <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 22 }}>
+          {/* Table compacte */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
+              <colgroup>
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
+              <thead style={{ background: C.paperSoft }}>
+                <tr>
+                  <TH>Réf.</TH>
+                  <TH>Client</TH>
+                  <TH>Laboratoire</TH>
+                  <TH>Ville</TH>
+                  <TH>Date</TH>
+                  <TH>Statut</TH>
+                  <TH center>Actions</TH>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && commandes.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "40px 0", color: C.muted }}>
+                      <div style={{ fontSize: 30, marginBottom: 8, opacity: .6 }}>📭</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.ink, marginBottom: 3, fontFamily: FONT_DISPLAY }}>
+                        Aucun devis trouvé
+                      </div>
+                      <div style={{ fontSize: 12 }}>Essayez un autre filtre.</div>
+                    </td>
+                  </tr>
+                ) : commandes.map((c, idx) => (
+                  <tr key={c.id}
+                    onClick={() => ouvrirModal(c)}
+                    style={{ cursor: "pointer", borderBottom: idx < commandes.length - 1 ? `1px solid ${C.lineSoft}` : "none", transition: "background .1s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = C.paperSoft}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                  >
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      <RefTag id={c.id} tone={BADGE_CMD[c.statut]?.dot || C.petrol} size="xs" />
+                    </td>
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      <div style={{ fontWeight: 700, fontSize: 12.5, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {fullName(c.client_nom, c.client_prenom)}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {c.client_email}
+                      </div>
+                    </td>
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      {c.laboratoire
+                        ? <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.inkSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <span style={{ fontSize: 12, flexShrink: 0 }}>🏥</span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{c.laboratoire}</span>
+                          </div>
+                        : <span style={{ color: C.muted, fontSize: 11.5 }}>—</span>}
+                    </td>
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {c.client_ville}
+                      </span>
+                    </td>
+                    <td style={{ padding: "8px 8px", fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>
+                      {fmtDate(c.date_commande)}
+                    </td>
+                    <td style={{ padding: "8px 8px" }}>
+                      <Badge label={c.statut} map={BADGE_CMD} size="sm" />
+                    </td>
+                    <td style={{ padding: "8px 8px" }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); ouvrirModal(c); }}
+                          style={{
+                            padding: "4px 10px", borderRadius: 6,
+                            border: `1.5px solid ${C.petrolLine}`, background: C.petrolSoft,
+                            fontSize: 11, fontWeight: 700, color: C.petrolDark, cursor: "pointer",
+                            fontFamily: FONT_BODY, whiteSpace: "nowrap",
+                          }}
+                        >Détails</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-              {/* ─ Infos client ─ */}
-              <section>
-                <SectionTitle icon="👤" label="Informations client" />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                  <InfoCard icon={<IconBuilding width={16} height={16} />} label="Nom complet"
-                    value={fullName(selected.client_nom, selected.client_prenom)} />
-                  <InfoCard icon="🏥" label="Laboratoire"
-                    value={selected.laboratoire || <Dash />} />
-                  <InfoCard icon="🏙️" label="Ville"
-                    value={selected.client_ville || <Dash />} />
-                  <InfoCard icon="📧" label="Email"
-                    value={
-                      <a href={`mailto:${selected.client_email}`}
-                        style={{ color: "#2563EB", fontWeight: 700, textDecoration: "none" }}>
-                        {selected.client_email}
-                      </a>
-                    } />
-                  <InfoCard icon="📞" label="Téléphone"
-                    value={selected.client_telephone || <Dash />} />
-                  <InfoCard icon="🪪" label="ICE"
-                    value={selected.client_ice || <Dash />} />
-                </div>
-              </section>
-
-              {/* ─ Produits ─ */}
-              <section>
-                <SectionTitle
-                  icon="📦"
-                  label="Produits commandés"
-                  right={loadDet && <span style={{ fontSize: 12, color: "#93C5FD" }}>Chargement…</span>}
-                />
-
+        {/* ═══════════════════════ MODAL DÉTAIL (compacte) ═══════════════════════ */}
+        <Modal
+          open={!!selected}
+          onClose={fermer}
+          title=""
+          size="lg"
+          footer={
+            selected && (
+              pendingAction === null ? (
                 <div style={{
-                  border: "1.5px solid #DBEAFE", borderRadius: 12,
-                  overflow: "hidden", boxShadow: "0 2px 8px rgba(37,99,235,.06)",
+                  display: "flex", justifyContent: "space-between", width: "100%",
+                  alignItems: "center", gap: 8, padding: "2px 0",
                 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "linear-gradient(90deg,#EFF6FF,#DBEAFE)" }}>
-                        {[
-                          ["Réf.", false], ["Produit", false], ["Marque", false],
-                          ["Type", false], ["Qté", true], ["Prix unit.", true],
-                          ["Remise", true], ["Péremption", true], ["Sous-total", true], ["", true],
-                        ].map(([h, c], i) => (
-                          <th key={i} style={{
-                            padding: "11px 14px", textAlign: c ? "center" : "left",
-                            fontSize: 11, fontWeight: 800, color: "#1E40AF",
-                            textTransform: "uppercase", letterSpacing: ".07em",
-                            borderBottom: "2px solid #BFDBFE",
-                          }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loadDet ? (
-                        <tr>
-                          <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
-                            Chargement…
-                          </td>
+                  <Btn variant="red_ghost" disabled={actionLoad || confirmSendLoad} onClick={() => setPendingAction("delete")}>
+                    <IconX width={13} height={13} /> Supprimer le devis
+                  </Btn>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn variant="ghost" disabled={actionLoad || confirmSendLoad || selected.statut === "En attente"}
+                      onClick={() => changerStatut(selected.id, "En attente")}>
+                      <IconClock width={13} height={13} /> {actionLoad ? "…" : "En attente"}
+                    </Btn>
+                    <Btn variant="primary" disabled={actionLoad || confirmSendLoad || selected.statut === "Confirmée"}
+                      onClick={() => confirmerEtEnvoyer(selected.id)}>
+                      <IconCheck width={13} height={13} /> {confirmSendLoad ? "Envoi en cours…" : "Confirmer & envoyer le PDF"}
+                    </Btn>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: C.danger, fontWeight: 700 }}>
+                    ⚠️ Supprimer définitivement ce devis ?
+                  </span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn variant="ghost" onClick={() => setPendingAction(null)} disabled={actionLoad}>Annuler</Btn>
+                    <Btn variant="danger" onClick={() => supprimer(selected.id)} disabled={actionLoad}>
+                      {actionLoad ? "Suppression…" : "Oui, supprimer"}
+                    </Btn>
+                  </div>
+                </div>
+              )
+            )
+          }
+        >
+          {selected && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, fontFamily: FONT_BODY }}>
+
+              {/* ══ HEADER INTERNE (compact + bouton copier + compteur d'articles) ══ */}
+              <div style={{
+                background: `linear-gradient(135deg, ${C.petrolDark} 0%, ${C.petrol} 100%)`,
+                borderRadius: "12px 12px 0 0",
+                padding: "16px 20px 14px",
+                position: "relative", overflow: "hidden",
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+              }}>
+                <div style={{
+                  position: "absolute", inset: 0, opacity: .07, pointerEvents: "none",
+                  backgroundImage: `linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)`,
+                  backgroundSize: "22px 22px",
+                }} />
+                <div style={{ position: "relative" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                    <RefTag id={selected.id} size="lg" />
+                    {/* Bouton copier la référence */}
+                    <button
+                      onClick={() => copierReference(selected.id)}
+                      title="Copier la référence"
+                      style={{
+                        width: 26, height: 26, borderRadius: 7,
+                        border: "1px solid rgba(255,255,255,.28)", background: "rgba(255,255,255,.12)",
+                        color: C.white, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <IconCopy size={12} />
+                    </button>
+                    <Badge label={selected.statut} map={BADGE_CMD} />
+                    {/* Compteur d'articles (aperçu rapide sans scroller) */}
+                    {detail?.lignes && (
+                      <span style={{
+                        fontSize: 10.5, fontWeight: 700, color: C.white,
+                        background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.22)",
+                        borderRadius: 999, padding: "2px 9px", fontFamily: FONT_BODY,
+                      }}>
+                        📦 {detail.lignes.length} article{detail.lignes.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#CFE4E1", display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <span>📅 {fmtDate(selected.date_commande)}</span>
+                    <span>👤 {fullName(selected.client_nom, selected.client_prenom)}</span>
+                    <span>🏥 {selected.laboratoire || "—"}</span>
+                  </div>
+                </div>
+                <div style={{
+                  position: "relative", textAlign: "right", background: "rgba(255,255,255,.12)",
+                  borderRadius: 10, padding: "7px 14px", border: "1px solid rgba(255,255,255,.15)",
+                }}>
+                  <div style={{ fontSize: 9.5, color: "#CFE4E1", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                    Total
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: C.white, marginTop: 1, fontFamily: FONT_DISPLAY }}>
+                    {fmtMontant(selected.total)}
+                  </div>
+                </div>
+              </div>
+
+              {/* ══ BODY (compact) ══ */}
+              <div style={{ padding: "14px 20px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+                {/* ─ Infos client ─ */}
+                <section>
+                  <SectionTitle icon="👤" label="Informations client" />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                    <InfoCard icon={<IconBuilding width={14} height={14} />} label="Nom complet"
+                      value={fullName(selected.client_nom, selected.client_prenom)} />
+                    <InfoCard icon="🏥" label="Laboratoire"
+                      value={selected.laboratoire || <Dash />} />
+                    <InfoCard icon="🏙️" label="Ville"
+                      value={selected.client_ville || <Dash />} />
+                    <InfoCard icon="📧" label="Email"
+                      value={
+                        <a href={`mailto:${selected.client_email}`}
+                          style={{ color: C.petrolDark, fontWeight: 700, textDecoration: "none" }}>
+                          {selected.client_email}
+                        </a>
+                      } />
+                    <InfoCard icon="📞" label="Téléphone"
+                      value={selected.client_telephone || <Dash />} />
+                    <InfoCard icon="🪪" label="ICE"
+                      value={selected.client_ice || <Dash />} />
+                  </div>
+                </section>
+
+                {/* ─ Produits ─ */}
+                <section>
+                  <SectionTitle
+                    icon="📦"
+                    label="Produits commandés"
+                    right={loadDet && <span style={{ fontSize: 11, color: C.petrol }}>Chargement…</span>}
+                  />
+
+                  {/* FIX : overflowX auto sur le conteneur pour ne jamais perdre le bouton crayon */}
+                  <div style={{
+                    border: `1.5px solid ${C.petrolLine}`, borderRadius: 10,
+                    overflowX: "auto", boxShadow: "0 2px 8px rgba(14,92,87,.06)",
+                  }}>
+                    {/* FIX : tableLayout fixed + colgroup pour répartir toutes les colonnes,
+                        avec minWidth pour garantir la lisibilité et l'accès au bouton crayon */}
+                    <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", minWidth: 780 }}>
+                      <colgroup>
+                        <col style={{ width: "9%" }} />   {/* Réf. */}
+                        <col style={{ width: "16%" }} />  {/* Produit */}
+                        <col style={{ width: "11%" }} />  {/* Marque */}
+                        <col style={{ width: "11%" }} />  {/* Type */}
+                        <col style={{ width: "6%" }} />   {/* Qté */}
+                        <col style={{ width: "10%" }} />  {/* Prix unit. */}
+                        <col style={{ width: "8%" }} />   {/* Remise */}
+                        <col style={{ width: "13%" }} />  {/* Péremption */}
+                        <col style={{ width: "10%" }} />  {/* Sous-total */}
+                        <col style={{ width: "6%" }} />   {/* Bouton crayon */}
+                      </colgroup>
+                      <thead>
+                        <tr style={{ background: `linear-gradient(90deg, ${C.petrolSoft}, #D9EAE7)` }}>
+                          {[
+                            ["Réf.", false], ["Produit", false], ["Marque", false],
+                            ["Type", false], ["Qté", true], ["Prix", true],
+                            ["Remise", true], ["DDP", true], ["total", true], ["", true],
+                          ].map(([h, c], i) => (
+                            <th key={i} style={{
+                              padding: "7px 8px", textAlign: c ? "center" : "left",
+                              fontSize: 9.5, fontWeight: 700, color: C.petrolDark, fontFamily: FONT_BODY,
+                              textTransform: "uppercase", letterSpacing: ".06em",
+                              borderBottom: `2px solid ${C.petrolLine}`, whiteSpace: "nowrap",
+                            }}>{h}</th>
+                          ))}
                         </tr>
-                      ) : detail?.lignes?.length > 0 ? detail.lignes.map((l, i) => (
-                        <React.Fragment key={l.id}>
-                          {/* ── Ligne lecture ── */}
-                          <tr
-                            style={{
-                              background: i % 2 === 0 ? "#fff" : "#F8FBFF",
-                              borderBottom: "1px solid #EEF2FF",
-                              transition: "background .1s",
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = "#EFF6FF"}
-                            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#F8FBFF"}
-                          >
-                            <td style={{ padding: "12px 14px", fontFamily: "monospace", fontSize: 11.5, color: "#6B7280", fontWeight: 600 }}>
-                              {l.produit_reference}
-                            </td>
-                            <td style={{ padding: "12px 14px", fontWeight: 700, fontSize: 13.5, color: "#111827" }}>
-                              {l.produit_nom}
-                            </td>
-                            <td style={{ padding: "12px 14px", fontSize: 13, color: "#374151" }}>
-                              {l.produit_marque}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                              <Badge label={l.produit_type} map={BADGE_PROD} />
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, color: "#2563EB", fontSize: 14 }}>
-                              {l.quantite}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: 13, color: "#374151" }}>
-                              {fmtMontant(l.prix_unitaire)}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                              {Number(l.remise) > 0
-                                ? <span style={{ background: "#FEF3C7", color: "#B45309", borderRadius: 6, padding: "3px 9px", fontWeight: 700, fontSize: 12 }}>
-                                    -{l.remise}%
-                                  </span>
-                                : <span style={{ color: "#D1D5DB", fontSize: 12 }}>—</span>}
-                            </td>
-                            {/* ── Date de péremption : frontend uniquement, jamais persistée en base ── */}
-                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                              {TYPES_AVEC_PEREMPTION.includes(l.produit_type) ? (
-                                <input
-                                  type="date"
-                                  value={datesPeremption[l.id] || ""}
-                                  onChange={(e) =>
-                                    setDatesPeremption((prev) => ({ ...prev, [l.id]: e.target.value }))
-                                  }
-                                  title="Date de péremption (non enregistrée en base — affichage/PDF uniquement)"
-                                  style={{
-                                    padding: "5px 8px", borderRadius: 6,
-                                    border: "1.5px solid #FDE68A", fontSize: 12, fontWeight: 600,
-                                    color: "#92400E", background: "#FFFBEB", outline: "none",
-                                  }}
-                                />
-                              ) : (
-                                <span style={{ color: "#D1D5DB", fontSize: 12 }}>N/A</span>
-                              )}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, fontSize: 14, color: "#111827" }}>
-                              {fmtMontant(l.sous_total)}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                              <button
-                                onClick={() => setEditLigne(
-                                  editLigne?.id === l.id ? null : {
-                                    id: l.id,
-                                    quantite: l.quantite,
-                                    prix_unitaire: l.prix_unitaire,
-                                    remise: Number(l.remise),
-                                  }
-                                )}
-                                title="Modifier cette ligne"
-                                style={{
-                                  width: 30, height: 30, borderRadius: 7,
-                                  border: editLigne?.id === l.id ? "2px solid #2563EB" : "1.5px solid #E5E7EB",
-                                  background: editLigne?.id === l.id ? "#EFF6FF" : "#fff",
-                                  color: editLigne?.id === l.id ? "#2563EB" : "#9CA3AF",
-                                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                                  transition: "all .12s",
-                                }}
-                              >
-                                <IconEdit size={13} />
-                              </button>
+                      </thead>
+                      <tbody>
+                        {loadDet ? (
+                          <tr>
+                            <td colSpan={10} style={{ textAlign: "center", padding: 24, color: C.muted, fontSize: 12.5 }}>
+                              Chargement…
                             </td>
                           </tr>
+                        ) : detail?.lignes?.length > 0 ? detail.lignes.map((l, i) => (
+                          <React.Fragment key={l.id}>
+                            {/* ── Ligne lecture ── */}
+                            <tr
+                              style={{
+                                background: i % 2 === 0 ? C.white : C.paperSoft,
+                                borderBottom: `1px solid ${C.lineSoft}`,
+                                transition: "background .1s",
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = C.petrolSoft}
+                              onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? C.white : C.paperSoft}
+                            >
+                              <td style={{ padding: "8px 8px", fontFamily: FONT_MONO, fontSize: 10.5, color: C.inkSoft, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {l.produit_reference}
+                              </td>
+                              <td style={{ padding: "8px 8px", fontWeight: 700, fontSize: 12, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {l.produit_nom}
+                              </td>
+                              <td style={{ padding: "8px 8px", fontSize: 11.5, color: C.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {l.produit_marque}
+                              </td>
+                              <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                                <Badge label={l.produit_type} map={BADGE_PROD} size="sm" />
+                              </td>
+                              <td style={{ padding: "8px 8px", textAlign: "center", fontWeight: 700, color: C.petrolDark, fontSize: 12.5, fontFamily: FONT_MONO }}>
+                                {l.quantite}
+                              </td>
+                              <td style={{ padding: "8px 8px", textAlign: "center", fontSize: 11.5, color: C.inkSoft, fontFamily: FONT_MONO, whiteSpace: "nowrap" }}>
+                                {fmtMontant(l.prix_unitaire)}
+                              </td>
+                              <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                                {Number(l.remise) > 0
+                                  ? <span style={{ background: C.claySoft, color: "#8A5423", borderRadius: 6, padding: "2px 7px", fontWeight: 700, fontSize: 11, fontFamily: FONT_MONO, whiteSpace: "nowrap" }}>
+                                      -{l.remise}%
+                                    </span>
+                                  : <span style={{ color: C.muted, fontSize: 11 }}>—</span>}
+                              </td>
+                              {/* ── Date de péremption : frontend uniquement, jamais persistée en base ── */}
+                              <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                                {TYPES_AVEC_PEREMPTION.includes(l.produit_type) ? (
+                                  <input
+                                    type="date"
+                                    value={datesPeremption[l.id] || ""}
+                                    onChange={(e) =>
+                                      setDatesPeremption((prev) => ({ ...prev, [l.id]: e.target.value }))
+                                    }
+                                    title="Date de péremption (non enregistrée en base — affichage/PDF uniquement)"
+                                    style={{
+                                      width: "100%", padding: "4px 4px", borderRadius: 6,
+                                      border: `1.5px solid ${C.clayLine}`, fontSize: 10.5, fontWeight: 600,
+                                      fontFamily: FONT_MONO, color: "#8A5423", background: C.claySoft, outline: "none",
+                                      boxSizing: "border-box",
+                                    }}
+                                  />
+                                ) : (
+                                  <span style={{ color: C.muted, fontSize: 11 }}>N/A</span>
+                                )}
+                              </td>
+                              <td style={{ padding: "8px 8px", textAlign: "center", fontWeight: 700, fontSize: 12, color: C.ink, fontFamily: FONT_MONO, whiteSpace: "nowrap" }}>
+                                {fmtMontant(l.sous_total)}
+                              </td>
+                              <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                                <button
+                                  onClick={() => setEditLigne(
+                                    editLigne?.id === l.id ? null : {
+                                      id: l.id,
+                                      quantite: l.quantite,
+                                      prix_unitaire: l.prix_unitaire,
+                                      remise: Number(l.remise),
+                                    }
+                                  )}
+                                  title="Modifier cette ligne"
+                                  style={{
+                                    width: 26, height: 26, borderRadius: 7,
+                                    border: editLigne?.id === l.id ? `2px solid ${C.petrol}` : `1.5px solid ${C.line}`,
+                                    background: editLigne?.id === l.id ? C.petrolSoft : C.white,
+                                    color: editLigne?.id === l.id ? C.petrolDark : C.muted,
+                                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                                    transition: "all .12s", margin: "0 auto",
+                                  }}
+                                >
+                                  <IconEdit size={12} />
+                                </button>
+                              </td>
+                            </tr>
 
-                          {/* ── Ligne édition inline ── */}
-                          {editLigne?.id === l.id && (
-                            <tr>
-                              <td colSpan={10} style={{ padding: 0 }}>
-                                <div style={{
-                                  background: "linear-gradient(135deg,#EFF6FF,#F0F9FF)",
-                                  borderTop: "2px dashed #93C5FD",
-                                  borderBottom: "2px dashed #93C5FD",
-                                  padding: "16px 18px",
-                                }}>
-                                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1E3A8A", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span>✏️</span> Modifier — {l.produit_nom}
-                                  </div>
-                                  <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
+                            {/* ── Barre d'édition compacte (une seule ligne) ── */}
+                            {editLigne?.id === l.id && (
+                              <tr>
+                                <td colSpan={10} style={{ padding: "6px 8px" }}>
+                                  <div style={{
+                                    display: "flex", alignItems: "center", flexWrap: "wrap",
+                                    gap: 0, background: C.white, borderRadius: 10,
+                                    border: `1.5px solid ${C.petrolLine}`,
+                                    borderLeft: `4px solid ${C.petrol}`,
+                                    boxShadow: "0 3px 12px rgba(14,92,87,.10)",
+                                    padding: "9px 14px",
+                                  }}>
+                                    <span style={{
+                                      fontSize: 10.5, fontWeight: 700, color: C.petrolDark,
+                                      fontFamily: FONT_DISPLAY, textTransform: "uppercase",
+                                      letterSpacing: ".05em", marginRight: 16, whiteSpace: "nowrap",
+                                    }}>
+                                      ✎ Édition
+                                    </span>
 
                                     {/* Quantité */}
-                                    <EditField label="Quantité" width={80}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 14 }}>
+                                      <span style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Qté</span>
                                       <input
                                         type="number" min={1}
                                         value={editLigne.quantite}
                                         onChange={(e) => setEditLigne((p) => ({ ...p, quantite: Number(e.target.value) }))}
-                                        style={inputStyle("#BFDBFE", "#2563EB")}
+                                        style={{
+                                          width: 46, padding: "4px 5px", borderRadius: 6,
+                                          border: `1.5px solid ${C.petrolLine}`, fontSize: 11.5, fontWeight: 700,
+                                          fontFamily: FONT_MONO, color: C.petrolDark, textAlign: "center", outline: "none",
+                                        }}
                                       />
-                                    </EditField>
+                                    </div>
+
+                                    <div style={{ width: 1, height: 20, background: C.lineSoft, marginRight: 14 }} />
 
                                     {/* Prix unitaire */}
-                                    <EditField label="Prix unitaire (MAD)" width={120}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 14 }}>
+                                      <span style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Prix</span>
                                       <input
                                         type="number" min={0} step="0.01"
                                         value={editLigne.prix_unitaire}
                                         onChange={(e) => setEditLigne((p) => ({ ...p, prix_unitaire: Number(e.target.value) }))}
-                                        style={inputStyle("#BFDBFE", "#374151")}
+                                        style={{
+                                          width: 72, padding: "4px 5px", borderRadius: 6,
+                                          border: `1.5px solid ${C.petrolLine}`, fontSize: 11.5, fontWeight: 700,
+                                          fontFamily: FONT_MONO, color: C.inkSoft, textAlign: "center", outline: "none",
+                                        }}
                                       />
-                                    </EditField>
+                                    </div>
+
+                                    <div style={{ width: 1, height: 20, background: C.lineSoft, marginRight: 14 }} />
 
                                     {/* Remise */}
-                                    <EditField label="Remise (%)" width={90}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 14 }}>
+                                      <span style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Remise %</span>
                                       <input
                                         type="number" min={0} max={100} step="0.01"
                                         value={editLigne.remise}
                                         onChange={(e) => setEditLigne((p) => ({ ...p, remise: Number(e.target.value) }))}
-                                        style={inputStyle("#FDE68A", "#B45309", "#FFFBEB")}
+                                        style={{
+                                          width: 56, padding: "4px 5px", borderRadius: 6,
+                                          border: `1.5px solid ${C.clayLine}`, fontSize: 11.5, fontWeight: 700,
+                                          fontFamily: FONT_MONO, color: "#8A5423", background: C.claySoft,
+                                          textAlign: "center", outline: "none",
+                                        }}
                                       />
-                                    </EditField>
+                                    </div>
 
-                                    {/* Aperçu sous-total */}
-                                    <EditField label="Sous-total calculé" width="auto">
-                                      <div style={{
-                                        padding: "8px 16px", borderRadius: 8,
-                                        background: "#EFF6FF", border: "2px solid #BFDBFE",
-                                        fontSize: 14, fontWeight: 900, color: "#1D4ED8", whiteSpace: "nowrap",
-                                      }}>
-                                        {fmtMontant(
-                                          Math.round(editLigne.quantite * editLigne.prix_unitaire * (1 - editLigne.remise / 100) * 100) / 100
-                                        )}
-                                      </div>
-                                    </EditField>
+                                    <div style={{ width: 1, height: 20, background: C.lineSoft, marginRight: 14 }} />
 
-                                    {/* Boutons */}
-                                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", alignItems: "flex-end" }}>
+                                    {/* Sous-total calculé */}
+                                    <div style={{
+                                      fontSize: 12, fontWeight: 700, color: C.petrolDark, fontFamily: FONT_MONO,
+                                      background: C.petrolSoft, borderRadius: 6, padding: "4px 10px",
+                                      whiteSpace: "nowrap", marginRight: 14,
+                                    }}>
+                                      {fmtMontant(
+                                        Math.round(editLigne.quantite * editLigne.prix_unitaire * (1 - editLigne.remise / 100) * 100) / 100
+                                      )}
+                                    </div>
+
+                                    {/* Actions : icônes rondes */}
+                                    <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
                                       <button
                                         onClick={() => setEditLigne(null)}
+                                        title="Annuler"
                                         style={{
-                                          padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                                          border: "1.5px solid #E5E7EB", background: "#fff", color: "#6B7280", cursor: "pointer",
+                                          width: 28, height: 28, borderRadius: "50%",
+                                          border: `1.5px solid ${C.line}`, background: C.white, color: C.inkSoft,
+                                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                                         }}
                                       >
-                                        Annuler
+                                        <IconX width={12} height={12} />
                                       </button>
                                       <button
                                         onClick={() => sauvegarderLigne(l.id)}
                                         disabled={saveLoad}
+                                        title="Enregistrer"
                                         style={{
-                                          padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                                          border: "none", background: saveLoad ? "#93C5FD" : "#2563EB",
-                                          color: "#fff", cursor: saveLoad ? "not-allowed" : "pointer",
-                                          display: "flex", alignItems: "center", gap: 6,
+                                          width: 28, height: 28, borderRadius: "50%", border: "none",
+                                          background: saveLoad ? C.petrolLine : C.petrol, color: C.white,
+                                          cursor: saveLoad ? "not-allowed" : "pointer",
+                                          display: "flex", alignItems: "center", justifyContent: "center",
                                         }}
                                       >
-                                        {saveLoad ? "Enregistrement…" : "✓ Sauvegarder"}
+                                        <IconCheck width={13} height={13} />
                                       </button>
                                     </div>
-
                                   </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      )) : (
-                        <tr>
-                          <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 13 }}>
-                            Aucun produit associé
-                          </td>
-                        </tr>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        )) : (
+                          <tr>
+                            <td colSpan={10} style={{ textAlign: "center", padding: 24, color: C.muted, fontSize: 12.5 }}>
+                              Aucun produit associé
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      {detail?.lignes?.length > 0 && (
+                        <tfoot>
+                          <tr style={{ background: `linear-gradient(90deg, ${C.petrolSoft}, #D9EAE7)`, borderTop: `2px solid ${C.petrolLine}` }}>
+                            <td colSpan={8} style={{ padding: "9px 8px", fontWeight: 700, fontSize: 12, color: C.petrolDark, textAlign: "right", fontFamily: FONT_BODY }}>
+                              Total commande
+                            </td>
+                            <td colSpan={2} style={{ padding: "9px 8px", textAlign: "center", fontWeight: 700, fontSize: 14, color: C.petrolDark, fontFamily: FONT_MONO }}>
+                              {fmtMontant(selected.total)}
+                            </td>
+                          </tr>
+                        </tfoot>
                       )}
-                    </tbody>
-                    {detail?.lignes?.length > 0 && (
-                      <tfoot>
-                        <tr style={{ background: "linear-gradient(90deg,#EFF6FF,#DBEAFE)", borderTop: "2px solid #BFDBFE" }}>
-                          <td colSpan={8} style={{ padding: "13px 14px", fontWeight: 800, fontSize: 13, color: "#1E40AF", textAlign: "right" }}>
-                            Total commande
-                          </td>
-                          <td colSpan={2} style={{ padding: "13px 14px", textAlign: "center", fontWeight: 900, fontSize: 16, color: "#1D4ED8" }}>
-                            {fmtMontant(selected.total)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-                <div style={{ fontSize: 11.5, color: "#9CA3AF", marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>ℹ️</span> Les dates de péremption sont saisies ici à titre indicatif (PDF envoyé au client) et ne sont pas enregistrées en base de données.
-                </div>
-              </section>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                     Les dates de péremption sont saisies ici à titre indicatif (PDF envoyé au client) et ne sont pas enregistrées en base de données.
+                  </div>
+                </section>
 
-              {/* ─ Note interne ─ */}
-              <section>
-                <SectionTitle icon="📝" label="Note interne" />
-                <textarea
-                  rows={3}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Ajouter un commentaire interne sur ce devis…"
-                  style={{
-                    width: "100%", padding: "12px 14px", borderRadius: 10,
-                    border: "1.5px solid #E5E7EB", fontSize: 13, resize: "vertical",
-                    fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-                    color: "#374151", background: "#FAFAFA", lineHeight: 1.6,
-                    transition: "border-color .15s",
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = "#93C5FD"}
-                  onBlur={(e) => e.target.style.borderColor = "#E5E7EB"}
-                />
-              </section>
-
+                {/* ─ Note interne ─ */}
+                
+              </div>
             </div>
-          </div>
-        )}
-      </Modal>
+          )}
+        </Modal>
+      </div>
     </AdminLayout>
   );
 }
