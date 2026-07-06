@@ -1,83 +1,57 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { Link } from "react-router-dom";
 
-function Produits() {
-  const produits = [
-    {
-      id: 1,
-      marque: "Sigma-Aldrich",
-      nom: "Acide sulfurique pur 95-97%",
-      description: "Acide sulfurique pour analyses",
-      ref: "GL-CH-001",
-      categorie: "Produits chimiques",
-      image:
-        "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=600",
-    },
-    {
-      id: 2,
-      marque: "Duran",
-      nom: "Bécher en verre borosilicaté",
-      description: "Bécher 250ml borosilicaté",
-      ref: "GL-VS-001",
-      categorie: "Verrerie scientifique",
-      image:
-        "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=600",
-    },
-    {
-      id: 3,
-      marque: "Philips",
-      nom: "Défibrillateur automatique DSA",
-      description: "Défibrillateur semi-automatique",
-      ref: "GL-MM-001",
-      categorie: "Matériels médicaux",
-      image:
-        "https://images.unsplash.com/photo-1584515933487-779824d29309?w=600",
-    },
-    {
-      id: 4,
-      marque: "Merck",
-      nom: "Éthanol absolu 99.8%",
-      description: "Éthanol absolu 99.8%",
-      ref: "GL-CH-002",
-      categorie: "Produits chimiques",
-      image:
-        "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600",
-    },
-    {
-      id: 5,
-      marque: "Olympus",
-      nom: "Microscope optique",
-      description: "Microscope professionnel",
-      ref: "GL-MS-001",
-      categorie: "Matériels scientifiques",
-      image:
-        "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600",
-    },
-  ];
+const API_URL = "http://localhost:4000/api/produits";
 
-  const categories = [
-    "Tous",
-    "Réactifs de laboratoire",
-    "Produits chimiques",
-    "Verrerie scientifique",
-    "Consommables médicaux",
-    "Matériels scientifiques",
-    "Matériels médicaux",
-  ];
+function Produits() {
+  const [produits, setProduits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [categorieActive, setCategorieActive] = useState("Tous");
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    fetch(API_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error("Erreur lors du chargement des produits");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.success) {
+          setProduits(data.data);
+        } else {
+          setError("Impossible de charger les produits");
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError("Erreur serveur, réessayez plus tard");
+        setLoading(false);
+      });
+  }, []);
+
+  // Génère la liste des catégories (statut) dynamiquement depuis les produits
+  const categories = [
+    "Tous",
+    ...Array.from(new Set(produits.map((p) => p.statut))).filter(Boolean),
+  ];
+
+  const getImageUrl = (image) => {
+    if (!image) return "https://via.placeholder.com/600x400?text=Produit";
+    return image; // déjà une URL complète venant du backend
+  };
+
   const produitsFiltres = produits.filter((produit) => {
     const categorieOk =
-      categorieActive === "Tous" ||
-      produit.categorie === categorieActive;
+      categorieActive === "Tous" || produit.statut === categorieActive;
 
     const rechercheOk =
-      produit.nom.toLowerCase().includes(search.toLowerCase()) ||
-      produit.marque.toLowerCase().includes(search.toLowerCase());
+      produit.nom?.toLowerCase().includes(search.toLowerCase()) ||
+      produit.marque?.toLowerCase().includes(search.toLowerCase());
 
     return categorieOk && rechercheOk;
   });
@@ -90,10 +64,9 @@ function Produits() {
       <section style={styles.hero}>
         <div style={styles.container}>
           <h1>Nos produits</h1>
-
           <p>
-            Découvrez notre catalogue complet de réactifs,
-            verrerie et matériel biomédical.
+            Découvrez notre catalogue complet de réactifs, verrerie et
+            matériel biomédical.
           </p>
         </div>
       </section>
@@ -117,14 +90,8 @@ function Produits() {
                   onClick={() => setCategorieActive(cat)}
                   style={{
                     ...styles.categoryBtn,
-                    background:
-                      categorieActive === cat
-                        ? "#8b0020"
-                        : "#f3f4f6",
-                    color:
-                      categorieActive === cat
-                        ? "white"
-                        : "#334155",
+                    background: categorieActive === cat ? "#8b0020" : "#f3f4f6",
+                    color: categorieActive === cat ? "white" : "#334155",
                   }}
                 >
                   {cat}
@@ -138,50 +105,71 @@ function Produits() {
       {/* LISTE */}
       <section style={styles.productsSection}>
         <div style={styles.container}>
-          <p style={styles.resultText}>
-            {produitsFiltres.length} produit(s)
-          </p>
+          {loading && <p style={styles.resultText}>Chargement des produits...</p>}
 
-          <div style={styles.grid}>
-            {produitsFiltres.map((produit) => (
-                <Link
-  to={`/produit/${produit.id}`}
-  style={{ textDecoration: "none", color: "inherit" }}
->
-              <div key={produit.id} style={styles.card}>
-                <img
-                  src={produit.image}
-                  alt={produit.nom}
-                  style={styles.image}
-                />
+          {error && (
+            <p style={{ ...styles.resultText, color: "#dc2626" }}>{error}</p>
+          )}
 
-                <div style={styles.body}>
-                  <div style={styles.header}>
-                    <span style={styles.marque}>
-                      {produit.marque}
-                    </span>
+          {!loading && !error && (
+            <>
+              <p style={styles.resultText}>
+                {produitsFiltres.length} produit(s)
+              </p>
 
-                    <span style={styles.stock}>
-                      En stock
-                    </span>
-                  </div>
+              <div style={styles.grid}>
+                {produitsFiltres.map((produit) => (
+                  <Link
+                    key={produit.id}
+                    to={`/produit/${produit.id}`}
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <div style={styles.card}>
+                      <img
+                        src={getImageUrl(produit.image)}
+                        alt={produit.nom}
+                        style={styles.image}
+                      />
 
-                  <h3 style={styles.title}>
-                    {produit.nom}
-                  </h3>
+                      <div style={styles.body}>
+                        <div style={styles.header}>
+                          <span style={styles.marque}>{produit.marque}</span>
 
-                  <p style={styles.desc}>
-                    {produit.description}
-                  </p>
+                          <span
+                            style={{
+                              ...styles.stock,
+                              background:
+                                produit.stock > 0 ? "#dcfce7" : "#fee2e2",
+                              color:
+                                produit.stock > 0 ? "#15803d" : "#b91c1c",
+                            }}
+                          >
+                            {produit.stock > 0
+                              ? "En stock"
+                              : "Rupture de stock"}
+                          </span>
+                        </div>
 
-                  <p style={styles.ref}>
-                    Réf: {produit.ref}
-                  </p>
-                </div>
+                        <h3 style={styles.title}>{produit.nom}</h3>
+
+                        <p style={styles.desc}>{produit.description}</p>
+
+                        <p style={styles.ref}>Réf: {produit.reference}</p>
+
+                        <p style={styles.prix}>
+                          {Number(produit.prix).toFixed(2)} DH
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
-              </Link>
-            ))}
-          </div>
+
+              {produitsFiltres.length === 0 && (
+                <p style={styles.resultText}>Aucun produit trouvé.</p>
+              )}
+            </>
+          )}
         </div>
       </section>
 
@@ -280,8 +268,6 @@ const styles = {
   },
 
   stock: {
-    background: "#dcfce7",
-    color: "#15803d",
     padding: "4px 10px",
     borderRadius: "20px",
     fontSize: "12px",
@@ -300,6 +286,13 @@ const styles = {
   ref: {
     color: "#94a3b8",
     fontSize: "14px",
+    marginBottom: "5px",
+  },
+
+  prix: {
+    color: "#8b0020",
+    fontWeight: "bold",
+    fontSize: "16px",
   },
 };
 

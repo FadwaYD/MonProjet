@@ -11,7 +11,7 @@ function Navbar() {
       </div>
 
       <div style={styles.navLinks}>
-        {["Accueil", "À propos", "Produits", "Services", "Contact"].map(
+        {["Accueil", "About", "Produits", "Services", "Contact"].map(
           (item) => (
             <Link
               key={item}
