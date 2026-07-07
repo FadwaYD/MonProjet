@@ -30,9 +30,6 @@ app.use("/api", utilisateurRoutes);
 // =======================
 // Routes Admin
 // =======================
-app.use("/api/clients", require("./admin/routes/clientRoutes"));
-app.use("/api/produits", require("./admin/routes/produitRoutes"));
-app.use("/api/commandes", require("./admin/routes/commandeRoutes"));
 
 // =======================
 // Routes Client

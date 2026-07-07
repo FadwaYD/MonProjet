@@ -21,7 +21,7 @@ function Produits() {
       })
       .then((data) => {
         if (data.success) {
-          setProduits(data.data);
+          setProduits(data.produits);
         } else {
           setError("Impossible de charger les produits");
         }

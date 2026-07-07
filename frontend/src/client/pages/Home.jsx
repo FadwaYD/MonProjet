@@ -21,15 +21,25 @@ function Home() {
   // ==========================
   useEffect(() => {
     fetch("http://localhost:4000/api/produits")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Erreur serveur");
+        }
+        return res.json();
+      })
       .then((data) => {
-        console.log("API DATA =>", data); // debug important
+        console.log("API DATA =>", data);
 
-        if (data.success) {
-          setProduits(data.data); // ✅ FIX ICI
+        if (data.success && Array.isArray(data.produits)) {
+          setProduits(data.produits);
+        } else {
+          setProduits([]);
         }
       })
-      .catch((err) => console.log("Erreur API:", err));
+      .catch((err) => {
+        console.error(err);
+        setProduits([]);
+      });
   }, []);
 
   return (
@@ -96,7 +106,7 @@ function Home() {
             <div style={styles.statIconWrap}>
               <FaBox size={26} color="#8b0000" />
             </div>
-            <h2 style={styles.statNumber}>{produits.length}</h2>
+            <h2 style={styles.statNumber}>{produits?.length || 0}</h2>
             <p style={styles.statLabel}>Produits</p>
           </div>
 
@@ -143,7 +153,7 @@ function Home() {
           </div>
 
           <div style={styles.grid}>
-            {produits.slice(0, 6).map((p) => (
+            {(produits || []).slice(0, 6).map((p) => (
               <div
                 key={p.id}
                 className="hoverLift"
