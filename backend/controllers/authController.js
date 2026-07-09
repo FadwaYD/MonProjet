@@ -2,6 +2,10 @@ const db = require("../config/db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+/* ============================
+   CONNEXION
+============================ */
+
 exports.login = (req, res) => {
 
     const { email, mot_de_passe } = req.body;
@@ -18,7 +22,11 @@ exports.login = (req, res) => {
     db.query(sql, [email], async (err, result) => {
 
         if (err) {
-            return res.status(500).json(err);
+            console.error("Erreur SQL (login):", err);
+            return res.status(500).json({
+                success: false,
+                message: "Erreur serveur lors de la connexion."
+            });
         }
 
         if (result.length === 0) {
@@ -30,9 +38,10 @@ exports.login = (req, res) => {
 
         const user = result[0];
 
-        // si mot de passe crypté
-
-       const isMatch = mot_de_passe === user.mot_de_passe;
+        const isMatch = await bcrypt.compare(
+            mot_de_passe,
+            user.mot_de_passe
+        );
 
         if (!isMatch) {
             return res.status(401).json({
@@ -53,7 +62,7 @@ exports.login = (req, res) => {
                 id: user.id,
                 role: user.role
             },
-            "secretkey",
+            process.env.JWT_SECRET || "secretkey",
             {
                 expiresIn: "1d"
             }
@@ -72,5 +81,121 @@ exports.login = (req, res) => {
         });
 
     });
+
+};
+
+/* ============================
+   INSCRIPTION
+============================ */
+
+exports.register = (req, res) => {
+
+    const {
+        ice,
+        nom,
+        prenom,
+        nomLabo,
+        ville,
+        email,
+        telephone,
+        mot_de_passe
+    } = req.body;
+
+    if (
+        !nom ||
+        !prenom ||
+        !email ||
+        !telephone ||
+        !mot_de_passe
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Veuillez remplir tous les champs."
+        });
+    }
+
+    db.query(
+        "SELECT * FROM utilisateurs WHERE email=?",
+        [email],
+        async (err, result) => {
+
+            if (err) {
+                console.error("Erreur SQL (register - check email):", err);
+                return res.status(500).json({
+                    success: false,
+                    message: "Erreur serveur, veuillez réessayer plus tard."
+                });
+            }
+
+            if (result.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Cet email existe déjà."
+                });
+            }
+
+            let hash;
+            try {
+                hash = await bcrypt.hash(mot_de_passe, 10);
+            } catch (hashErr) {
+                console.error("Erreur bcrypt (register):", hashErr);
+                return res.status(500).json({
+                    success: false,
+                    message: "Erreur serveur lors du hachage du mot de passe."
+                });
+            }
+
+            const sql = `
+                INSERT INTO utilisateurs
+                (
+                    ice,
+                    nom,
+                    prenom,
+                    nomLabo,
+                    ville,
+                    email,
+                    telephone,
+                    mot_de_passe,
+                    role,
+                    statut
+                )
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            `;
+
+            db.query(
+                sql,
+                [
+                    ice,
+                    nom,
+                    prenom,
+                    nomLabo,
+                    ville,
+                    email,
+                    telephone,
+                    hash,
+                    "Client",
+                    1
+                ],
+                (err) => {
+
+                    if (err) {
+                        // Affiche l'erreur SQL exacte dans la console du serveur
+                        console.error("Erreur SQL (register - insert):", err);
+                        return res.status(500).json({
+                            success: false,
+                            message: "Erreur serveur, veuillez réessayer plus tard."
+                        });
+                    }
+
+                    res.status(201).json({
+                        success: true,
+                        message: "Compte créé avec succès."
+                    });
+
+                }
+            );
+
+        }
+    );
 
 };
