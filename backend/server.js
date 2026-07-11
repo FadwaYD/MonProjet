@@ -3,12 +3,13 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const multer  = require("multer");
+const reportRoutes = require("./routes/admin/reportRoutes");
 
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
+app.use("/api/admin", reportRoutes);
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const notificationRoutes = require("./routes/admin/notificationRoutes");
@@ -25,6 +26,11 @@ const dashboardRoutes = require("./routes/admin/dashboardRoutes");
 app.use("/api/admin", dashboardRoutes);
 
 app.use("/api/admin", contactRoutes);
+
+// ─── Route Profil Admin (Paramètres du compte) ───────────────────────────────
+const profileRoutes = require("./routes/admin/profileRoutes");
+app.use("/api/admin", profileRoutes);
+
 // ─── Gestion erreurs Multer ───────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes("images")) {

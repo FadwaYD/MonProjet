@@ -7,10 +7,6 @@ import {
   IconDownload, IconBox, IconTag, IconShield, IconClock, IconMail,
 } from "./components/Icons";
 
-// Dépendances à installer dans le projet :
-//   npm install jspdf html2canvas
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 const API_URL = "http://localhost:4000";
 
@@ -126,57 +122,7 @@ export default function Dashboard() {
     },
   ] : [];
 
-  // ---------- EXPORT PDF (capture visuelle du même design que la page) ----------
-  const handleExportPDF = async () => {
-    if (!dashboardRef.current) return;
-    setExporting(true);
-    try {
-      const canvas = await html2canvas(dashboardRef.current, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-      });
-      const imgData = canvas.toDataURL("image/png");
 
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const headerHeight = 22;
-
-      // En-tête aux couleurs de la marque
-      pdf.setFillColor(122, 15, 45);
-      pdf.rect(0, 0, pageWidth, 16, "F");
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(13);
-      pdf.text("Grand Laboratoire — Tableau de bord", margin, 10.5);
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(110);
-      pdf.text(`Généré le ${new Date().toLocaleDateString("fr-FR")} à ${new Date().toLocaleTimeString("fr-FR")}`, margin, 21);
-      pdf.setTextColor(0);
-
-      const imgWidth = pageWidth - margin * 2;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = headerHeight;
-
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - position;
-
-      while (heightLeft > 0) {
-        pdf.addPage();
-        position = heightLeft - imgHeight;
-        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(`grand-laboratoire-dashboard-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } finally {
-      setExporting(false);
-    }
-  };
 
   // Barre latérale professionnelle : résumé rapide basé sur les vraies données
   const sidebar = {
@@ -286,20 +232,7 @@ export default function Dashboard() {
           overflow: "hidden",
         }}
       >
-        <div style={{ flexShrink: 0 }}>
-          <PageHead
-            crumb={<>Admin&nbsp;/&nbsp;<b>Tableau de bord</b></>}
-            title="Bonjour, Fadwa 👋"
-            description="Voici un aperçu de l'activité de Grand Laboratoire aujourd'hui."
-            actions={
-              <>
-                <button className="gl-btn gl-btn-secondary" onClick={handleExportPDF} disabled={exporting}>
-                  <IconDownload width={15} height={15} /> {exporting ? "Génération…" : "Exporter en PDF"}
-                </button>
-              </>
-            }
-          />
-        </div>
+    
 
         {/* Tout ce qui est à l'intérieur de cette div est capturé tel quel dans le PDF exporté */}
         <div

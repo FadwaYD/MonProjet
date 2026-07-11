@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./client/pages/Home";
 import About from "./client/pages/About";
@@ -16,6 +15,7 @@ import AdminCustomers from "./admin/Customers";
 import AdminMessages from "./admin/Messages";
 import AdminReports from "./admin/Reports";
 import AccountValidations from "./admin/AccountValidations";
+import ParametresAdmin from "./admin/ParametresAdmin";
 
 function App() {
   return (
@@ -28,8 +28,8 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/connexion" element={<Connexion />} />
         <Route path="/inscription" element={<Inscription />} />
-        <Route path="/produit/:id" element={<DetailProduit />}/>
-        
+        <Route path="/produit/:id" element={<DetailProduit />} />
+
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/produits" element={<AdminProducts />} />
         <Route path="/admin/devis" element={<AdminQuoteRequests />} />
@@ -37,10 +37,10 @@ function App() {
         <Route path="/admin/messages" element={<AdminMessages />} />
         <Route path="/admin/rapports" element={<AdminReports />} />
         <Route path="/admin/validations" element={<AccountValidations />} />
+        <Route path="/admin/parametres" element={<ParametresAdmin />} />
 
         {/* fallback route */}
         {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
-
       </Routes>
     </BrowserRouter>
   );

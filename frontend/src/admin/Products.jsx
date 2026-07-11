@@ -1,14 +1,29 @@
+/**
+ * Products.jsx
+ * ── Design (v3 — thème Bordeaux, aligné sur QuoteRequests.jsx) ─────────────
+ * Reprend l'identité visuelle de la page "Demandes de devis" :
+ *   - Palette "cave à vin" (bordeaux profond / lie-de-vin / doré cire-de-bouchon)
+ *   - Typographie Space Grotesk (titres) + Inter (corps) + IBM Plex Mono (réf/chiffres)
+ *   - Étiquette-échantillon RefTag pour la référence produit
+ *   - Toasts au lieu des alert() natifs
+ * IMPORTANT : contrairement à une version précédente, la fiche produit,
+ * le formulaire d'ajout/modification et la confirmation de suppression
+ * restent des POPUPS (composant <Modal>), comme dans la version d'origine —
+ * seul le style (couleurs, polices, badges) a été aligné sur le thème Bordeaux.
+ * Aucune logique métier (API, endpoints, champs) n'a été modifiée.
+ */
+
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import AdminLayout from "./components/AdminLayout";
 import PageHead from "./components/PageHead";
 import Modal from "./components/Modal";
 import {
   IconBox, IconFlask, IconPlus, IconSearch,
-  IconEdit, IconTrash, IconAlert, IconDownload,
+  IconEdit as IconEditOutline, IconTrash, IconAlert, IconDownload, IconCheck, IconX,
 } from "./components/Icons";
 
+// ─── Config ───────────────────────────────────────────────────────────────────
 const API = "http://localhost:4000/api/produits";
-
 const STATUTS = ["Tous", "Réactif", "Consommable", "Matériel"];
 
 const EMPTY_FORM = {
@@ -31,78 +46,280 @@ const COMPANY = {
   ice:     "000527835000083",
 };
 
-const BORDEAUX_RGB = [122, 30, 46];
-const GRAY_RGB     = [107, 114, 128];
-const LIGHT_GRAY_RGB = [243, 244, 246];
+// ─── Design tokens (identiques à QuoteRequests.jsx) ──────────────────────────
+const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
+const FONT_BODY    = "'Inter', -apple-system, sans-serif";
+const FONT_MONO    = "'IBM Plex Mono', 'SFMono-Regular', monospace";
 
+const C = {
+  ink:        "#241014",
+  inkSoft:    "#5C3A40",
+  paper:      "#FBF3F1",
+  paperSoft:  "#FDF8F6",
+  white:      "#FFFFFF",
+  petrol:     "#7A1F30",
+  petrolDark: "#4E0F1D",
+  petrolSoft: "#F4E1E5",
+  petrolLine: "#E3BEC7",
+  clay:       "#B8863A",
+  claySoft:   "#FBEFDB",
+  clayLine:   "#EAD3A4",
+  sage:       "#7D6A6D",
+  sageSoft:   "#EFE7E8",
+  sageLine:   "#DCCBCE",
+  success:    "#3A7D5C",
+  successSoft:"#E3F0E9",
+  successLine:"#B9DAC7",
+  danger:     "#A8433D",
+  dangerSoft: "#F7E7E5",
+  dangerLine: "#E6BEB9",
+  line:       "#E7DCD9",
+  lineSoft:   "#F0E7E4",
+  muted:      "#A08E90",
+};
+
+const GOOGLE_FONTS_IMPORT =
+  "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');";
+
+// Type de produit -> couleur (identique à QuoteRequests)
+const BADGE_PROD = {
+  Réactif:     { bg: C.petrolSoft, color: "#4E0F1D", dot: C.petrol },
+  Consommable: { bg: C.claySoft,   color: "#8A5423", dot: C.clay },
+  Matériel:    { bg: C.sageSoft,   color: "#4B3538", dot: C.sage },
+};
+
+// État du stock -> couleur (harmonisé avec la palette bordeaux)
+const BADGE_STOCK = {
+  "En stock":     { bg: C.successSoft, color: "#265E43", dot: C.success },
+};
+
+// Abréviations affichées uniquement dans le tableau (n'affecte pas les valeurs réelles/API)
+const STATUT_ABBR = {
+  "Réactif":     "Réactif",
+  "Consommable": "Consom.",
+  "Matériel":    "Matériel",
+};
+
+const BORDEAUX_RGB       = [122, 31, 48];
+const GRAY_RGB           = [107, 114, 128];
+const LIGHT_BORDEAUX_RGB = [244, 225, 229];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatPrix(prix) {
   const n = Number(prix);
   if (Number.isNaN(n)) return "—";
   return `${n.toFixed(2)} DH`;
 }
 
-function StockBadge({ label }) {
-  const styles = {
-    "En stock":     { background: "#d1fae5", color: "#065f46" },
-    "Stock faible": { background: "#fef3c7", color: "#92400e" },
-    "Rupture":      { background: "#fee2e2", color: "#991b1b" },
-  };
-  const s = styles[label] || styles["En stock"];
+// ─── Icônes inline (mêmes que QuoteRequests.jsx) ─────────────────────────────
+function IconArrowLeft({ size = 14 }) {
   return (
-    <span style={{ ...s, padding: "2px 8px", borderRadius: 20, fontSize: 10.5, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap" }}>
-      {label}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5" />
+      <path d="M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function IconCopy({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+// ─── Étiquette-échantillon pour la référence produit ─────────────────────────
+function RefTag({ text, tone = C.petrol, size = "md" }) {
+  const big = size === "lg";
+  const xs  = size === "xs";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: big ? 9 : xs ? 4 : 7,
+      fontFamily: FONT_MONO, fontWeight: 600,
+      fontSize: big ? 18 : xs ? 11 : 12.5, letterSpacing: ".03em",
+      color: big ? C.white : tone,
+      background: big ? "rgba(255,255,255,.14)" : `${tone}14`,
+      border: big ? "1px solid rgba(255,255,255,.28)" : `1px solid ${tone}33`,
+      borderRadius: xs ? 6 : 7,
+      padding: big ? "6px 14px 6px 10px" : xs ? "2px 7px 2px 5px" : "3px 10px 3px 7px",
+      whiteSpace: "nowrap",
+    }}>
+      <span style={{ display: "flex", gap: xs ? 1 : 1.5, alignItems: "center" }}>
+        {[3, 5, 2, 4].map((h, i) => (
+          <span key={i} style={{
+            width: big ? 2 : 1.5, height: big ? h + 3 : xs ? Math.max(h - 1, 2) : h + 2,
+            background: big ? "rgba(255,255,255,.65)" : tone, opacity: .8,
+            borderRadius: 1,
+          }} />
+        ))}
+      </span>
+      {text}
     </span>
   );
 }
 
-function TypeBadge({ statut }) {
-  const styles = {
-    "Réactif":     { background: "#ede9fe", color: "#5b21b6" },
-    "Consommable": { background: "#e0f2fe", color: "#0369a1" },
-    "Matériel":    { background: "#f0fdf4", color: "#166534" },
-  };
-  const s = styles[statut] || {};
+// ─── Titre de section ─────────────────────────────────────────────────────────
+function SectionTitle({ icon, label, right }) {
   return (
-    <span style={{ ...s, padding: "2px 8px", borderRadius: 20, fontSize: 10.5, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap" }}>
-      {statut}
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+      paddingBottom: 8, borderBottom: `2px solid ${C.lineSoft}`,
+    }}>
+      <span style={{
+        fontSize: 13, width: 24, height: 24, borderRadius: 6,
+        background: C.petrolSoft, color: C.petrolDark,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>{icon}</span>
+      <span style={{
+        fontSize: 13.5, fontWeight: 700, color: C.ink, fontFamily: FONT_DISPLAY,
+        textTransform: "uppercase", letterSpacing: ".04em",
+      }}>{label}</span>
+      {right && <span style={{ marginLeft: "auto" }}>{right}</span>}
+    </div>
+  );
+}
+
+function Dash() {
+  return <span style={{ color: C.muted, fontSize: 12, fontStyle: "italic" }}>Non renseigné</span>;
+}
+
+// ─── UI atoms (identiques à QuoteRequests.jsx) ───────────────────────────────
+function Badge({ label, map, size = "md", displayLabel }) {
+  const s = map[label] || { bg: C.sageSoft, color: C.inkSoft, dot: C.muted };
+  const sm = size === "sm";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: sm ? 4 : 5,
+      padding: sm ? "2px 8px" : "3px 10px", borderRadius: 999,
+      fontSize: sm ? 10.5 : 11.5, fontWeight: 700,
+      fontFamily: FONT_BODY, background: s.bg, color: s.color, whiteSpace: "nowrap",
+    }}>
+      <span style={{ width: sm ? 5 : 6, height: sm ? 5 : 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
+      {displayLabel ?? label}
     </span>
   );
 }
 
-// ─── Photo produit (miniature avec placeholder) ──────────────────────────────
+function Btn({ variant = "ghost", onClick, disabled, children, style = {}, type = "button" }) {
+  const vars = {
+    primary:   { background: C.petrol, color: C.white, border: "none" },
+    danger:    { background: C.danger, color: C.white, border: "none" },
+    ghost:     { background: C.white,  color: C.inkSoft, border: `1.5px solid ${C.line}` },
+    red_ghost: { background: C.dangerSoft, color: C.danger, border: `1.5px solid ${C.dangerLine}` },
+    warning:   { background: C.clay,   color: C.white, border: "none" },
+  };
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+      fontFamily: FONT_BODY, cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? .45 : 1, transition: "opacity .12s, transform .12s",
+      ...vars[variant], ...style,
+    }}>
+      {children}
+    </button>
+  );
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  const bg = { success: C.petrolDark, error: C.danger, info: C.clay }[toast.type] || C.inkSoft;
+  return (
+    <div style={{
+      position: "fixed", bottom: 28, right: 28, zIndex: 9999,
+      background: bg, color: C.white, padding: "12px 22px", borderRadius: 10,
+      fontWeight: 700, fontSize: 13.5, fontFamily: FONT_BODY,
+      boxShadow: "0 10px 34px rgba(0,0,0,.2)",
+      display: "flex", alignItems: "center", gap: 10, animation: "toastIn .22s ease",
+    }}>
+      {toast.type === "success" ? "✓" : "✕"} {toast.message}
+      <style>{`@keyframes toastIn{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </div>
+  );
+}
+
+function InfoCard({ icon, label, value }) {
+  return (
+    <div style={{
+      background: C.paperSoft, borderRadius: 9, padding: "9px 12px",
+      display: "flex", gap: 9, alignItems: "flex-start", border: `1px solid ${C.line}`,
+    }}>
+      <div style={{
+        width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+        background: C.petrolSoft, color: C.petrolDark,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+      }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontSize: 9.5, color: C.muted, fontWeight: 700, fontFamily: FONT_BODY,
+          textTransform: "uppercase", letterSpacing: ".07em",
+        }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: C.ink, marginTop: 2, fontFamily: FONT_BODY,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const TH = ({ children, center, width }) => (
+  <th style={{
+    padding: "8px 8px", textAlign: center ? "center" : "left",
+    fontSize: 9.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY,
+    textTransform: "uppercase", letterSpacing: ".06em",
+    borderBottom: `1.5px solid ${C.line}`, whiteSpace: "nowrap",
+    width: width || "auto",
+  }}>
+    {children}
+  </th>
+);
+
+// ─── Miniature produit ────────────────────────────────────────────────────────
 function ProductThumb({ src, alt, size = 36 }) {
   return src ? (
     <img
       src={src} alt={alt}
-      style={{ width: size, height: size, borderRadius: 8, objectFit: "cover", border: "1px solid var(--gl-gray-200)", flexShrink: 0 }}
+      style={{ width: size, height: size, borderRadius: 8, objectFit: "cover", border: `1px solid ${C.line}`, flexShrink: 0 }}
     />
   ) : (
     <div style={{
-      width: size, height: size, borderRadius: 8, background: "var(--gl-gray-100)",
+      width: size, height: size, borderRadius: 8, background: C.paperSoft,
       display: "flex", alignItems: "center", justifyContent: "center",
-      color: "var(--gl-gray-400)", fontSize: size * 0.4, flexShrink: 0,
+      color: C.muted, flexShrink: 0, border: `1px solid ${C.line}`,
     }}>
       <IconBox width={size * 0.5} height={size * 0.5} />
     </div>
   );
 }
 
+// ─── Champs de formulaire (restylés bordeaux) ────────────────────────────────
 function Field({ label, name, type = "text", value, onChange, required, placeholder, min, step }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--gl-gray-600)" }}>
-        {label}{required && <span style={{ color: "#e53e3e", marginLeft: 2 }}>*</span>}
+      <label style={{ fontSize: 11.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: ".04em" }}>
+        {label}{required && <span style={{ color: C.danger, marginLeft: 2 }}>*</span>}
       </label>
       <input
         type={type} name={name} value={value} onChange={onChange}
         placeholder={placeholder || label} required={required} min={min} step={step}
         style={{
-          padding: "8px 12px", borderRadius: 8,
-          border: "1px solid var(--gl-gray-200)", fontSize: 13.5,
-          outline: "none", background: "var(--gl-gray-50)", color: "var(--gl-gray-900)",
+          padding: "9px 12px", borderRadius: 8,
+          border: `1.5px solid ${C.line}`, fontSize: 13.5,
+          outline: "none", background: C.paperSoft, color: C.ink, fontFamily: FONT_BODY,
         }}
-        onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
-        onBlur={(e)  => (e.target.style.borderColor = "var(--gl-gray-200)")}
+        onFocus={(e) => (e.target.style.borderColor = C.petrol)}
+        onBlur={(e)  => (e.target.style.borderColor = C.line)}
       />
     </div>
   );
@@ -111,23 +328,24 @@ function Field({ label, name, type = "text", value, onChange, required, placehol
 function TextAreaField({ label, name, value, onChange, placeholder }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--gl-gray-600)" }}>Description</label>
+      <label style={{ fontSize: 11.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: ".04em" }}>
+        Description
+      </label>
       <textarea
-        name={name} value={value} onChange={onChange} placeholder={placeholder || label} rows={3}
+        name={name} value={value} onChange={onChange} placeholder={placeholder || label} rows={4}
         style={{
-          padding: "8px 12px", borderRadius: 8,
-          border: "1px solid var(--gl-gray-200)", fontSize: 13.5,
-          outline: "none", background: "var(--gl-gray-50)", color: "var(--gl-gray-900)",
-          resize: "vertical", fontFamily: "inherit",
+          padding: "9px 12px", borderRadius: 8,
+          border: `1.5px solid ${C.line}`, fontSize: 13.5,
+          outline: "none", background: C.paperSoft, color: C.ink, fontFamily: FONT_BODY,
+          resize: "vertical",
         }}
-        onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
-        onBlur={(e)  => (e.target.style.borderColor = "var(--gl-gray-200)")}
+        onFocus={(e) => (e.target.style.borderColor = C.petrol)}
+        onBlur={(e)  => (e.target.style.borderColor = C.line)}
       />
     </div>
   );
 }
 
-// ─── Champ upload image avec aperçu ──────────────────────────────────────────
 function ImageField({ currentUrl, onFileChange, onRemove }) {
   const [preview, setPreview] = useState(currentUrl || null);
   const inputRef = useRef(null);
@@ -149,29 +367,26 @@ function ImageField({ currentUrl, onFileChange, onRemove }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--gl-gray-600)" }}>Photo du produit</label>
+      <label style={{ fontSize: 11.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: ".04em" }}>
+        Photo du produit
+      </label>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {preview ? (
-          <img src={preview} alt="Aperçu" style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--gl-gray-200)" }} />
+          <img src={preview} alt="Aperçu" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", border: `1px solid ${C.line}` }} />
         ) : (
-          <div style={{ width: 64, height: 64, borderRadius: 10, background: "var(--gl-gray-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gl-gray-400)" }}>
-            <IconBox width={26} height={26} />
+          <div style={{ width: 72, height: 72, borderRadius: 10, background: C.paperSoft, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, border: `1px solid ${C.line}` }}>
+            <IconBox width={28} height={28} />
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <button
-            type="button"
-            className="gl-btn gl-btn-secondary"
-            style={{ fontSize: 12.5, padding: "6px 12px" }}
-            onClick={() => inputRef.current?.click()}
-          >
+          <Btn variant="ghost" onClick={() => inputRef.current?.click()}>
             {preview ? "Changer la photo" : "Ajouter une photo"}
-          </button>
+          </Btn>
           {preview && (
             <button
               type="button"
               onClick={handleRemove}
-              style={{ fontSize: 12, color: "#c53030", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+              style={{ fontSize: 12, color: C.danger, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: FONT_BODY, fontWeight: 600 }}
             >
               Retirer la photo
             </button>
@@ -182,21 +397,13 @@ function ImageField({ currentUrl, onFileChange, onRemove }) {
           onChange={handleFile} style={{ display: "none" }}
         />
       </div>
-      <span style={{ fontSize: 11, color: "var(--gl-gray-400)" }}>JPG, PNG, WEBP ou GIF — 5 Mo max</span>
+      <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT_BODY }}>JPG, PNG, WEBP ou GIF — 5 Mo max</span>
     </div>
   );
 }
 
-function ExportMenu({ produits }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
+// ─── Export PDF — bandeau bordeaux, logo GL ──────────────────────────────────
+function ExportPdfButton({ produits }) {
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -206,94 +413,7 @@ function ExportMenu({ produits }) {
     });
   }
 
-  async function exportExcel() {
-    setOpen(false);
-    try {
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js");
-      const workbook = new window.ExcelJS.Workbook();
-      const ws = workbook.addWorksheet("Catalogue");
-
-      ws.columns = [
-        { width: 16 }, { width: 32 }, { width: 18 }, { width: 36 },
-        { width: 12 }, { width: 14 }, { width: 10 }, { width: 14 },
-      ];
-
-      ws.mergeCells("A1:A3");
-      const logoCell = ws.getCell("A1");
-      logoCell.value = "GL";
-      logoCell.font = { bold: true, size: 22, color: { argb: "FFFFFFFF" } };
-      logoCell.alignment = { vertical: "middle", horizontal: "center" };
-      logoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7A1E2E" } };
-
-      ws.mergeCells("B1:H1");
-      const nameCell = ws.getCell("B1");
-      nameCell.value = COMPANY.name;
-      nameCell.font = { bold: true, size: 20, color: { argb: "FF7A1E2E" } };
-      nameCell.alignment = { vertical: "middle" };
-
-      ws.mergeCells("B2:H2");
-      ws.getCell("B2").value = COMPANY.address;
-      ws.getCell("B2").font = { size: 10, color: { argb: "FF6B7280" } };
-
-      ws.mergeCells("B3:H3");
-      ws.getCell("B3").value = `Tél : ${COMPANY.tel}   —   Casablanca, le ${new Date().toLocaleDateString("fr-FR")}`;
-      ws.getCell("B3").font = { size: 10, color: { argb: "FF6B7280" } };
-
-      ws.getRow(4).height = 6;
-
-      ws.mergeCells("A5:H5");
-      const titleCell = ws.getCell("A5");
-      titleCell.value = `Catalogue des produits — ${produits.length} article(s)`;
-      titleCell.font = { bold: true, size: 12, color: { argb: "FF374151" } };
-
-      ws.getRow(6).height = 6;
-
-      const headerRow = ws.getRow(7);
-      headerRow.values = ["Référence", "Nom", "Marque", "Description", "Prix (DH)", "Type", "Stock (u.)", "État stock"];
-      headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7A1E2E" } };
-        cell.alignment = { vertical: "middle", horizontal: "center" };
-      });
-      headerRow.height = 20;
-
-      produits.forEach((p, i) => {
-        const row = ws.addRow([
-          p.reference, p.nom, p.marque, p.description || "—",
-          Number(p.prix) || 0, p.statut, p.stock, p.stockLabel,
-        ]);
-        row.getCell(5).numFmt = '#,##0.00 "DH"';
-        row.eachCell((cell) => { cell.alignment = { vertical: "middle" }; });
-        if (i % 2 === 1) {
-          row.eachCell((cell) => {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
-          });
-        }
-      });
-
-      const footerStart = ws.lastRow.number + 2;
-      ws.mergeCells(`A${footerStart}:H${footerStart}`);
-      ws.getCell(`A${footerStart}`).value = COMPANY.legal;
-      ws.getCell(`A${footerStart}`).font = { italic: true, size: 8, color: { argb: "FF9CA3AF" } };
-
-      ws.mergeCells(`A${footerStart + 1}:H${footerStart + 1}`);
-      ws.getCell(`A${footerStart + 1}`).value = `ICE N° : ${COMPANY.ice}   —   ${COMPANY.bank}`;
-      ws.getCell(`A${footerStart + 1}`).font = { italic: true, size: 8, color: { argb: "FF9CA3AF" } };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob   = new Blob([buffer], { type: "application/octet-stream" });
-      const url    = URL.createObjectURL(blob);
-      const a      = document.createElement("a");
-      a.href = url; a.download = `catalogue_produits_${new Date().toISOString().slice(0,10)}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Erreur export Excel : " + e.message);
-    }
-  }
-
   async function exportPDF() {
-    setOpen(false);
     try {
       await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
       await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
@@ -303,28 +423,27 @@ function ExportMenu({ produits }) {
       const pageWidth = doc.internal.pageSize.getWidth();
 
       doc.setFillColor(...BORDEAUX_RGB);
-      doc.roundedRect(14, 9, 16, 16, 2, 2, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(255, 255, 255);
-      doc.text("GL", 22, 19.5, { align: "center" });
+      doc.rect(0, 0, pageWidth, 30, "F");
 
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(14, 6, 18, 18, 3, 3, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
       doc.setTextColor(...BORDEAUX_RGB);
-      doc.setFontSize(18);
-      doc.text(COMPANY.name, 34, 17);
+      doc.text("GL", 23, 18.5, { align: "center" });
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text(COMPANY.name, 38, 15);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
-      doc.setTextColor(...GRAY_RGB);
-      doc.text(COMPANY.address, 34, 23);
-      doc.text(`Tél : ${COMPANY.tel}`, 34, 27.5);
+      doc.text(COMPANY.address, 38, 20.5);
+      doc.text(`Tél : ${COMPANY.tel}`, 38, 25);
 
       doc.setFontSize(9);
-      doc.text(`Casablanca, le ${new Date().toLocaleDateString("fr-FR")}`, pageWidth - 14, 17, { align: "right" });
-
-      doc.setDrawColor(...BORDEAUX_RGB);
-      doc.setLineWidth(0.6);
-      doc.line(14, 32, pageWidth - 14, 32);
+      doc.text(`Casablanca, le ${new Date().toLocaleDateString("fr-FR")}`, pageWidth - 14, 15, { align: "right" });
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
@@ -333,28 +452,16 @@ function ExportMenu({ produits }) {
 
       doc.autoTable({
         startY: 44,
-        head: [["Référence", "Nom", "Marque", "Prix", "Type", "Stock", "État"]],
+        head: [["Référence", "Nom", "Marque", "Prix", "Type", "Stock"]],
         body: produits.map((p) => [
-          p.reference, p.nom, p.marque, formatPrix(p.prix), p.statut, `${p.stock} u.`, p.stockLabel,
+          p.reference, p.nom, p.marque, formatPrix(p.prix), p.statut, `${p.stock} u.`,
         ]),
         styles: { fontSize: 8.5, cellPadding: 3 },
         headStyles: { fillColor: BORDEAUX_RGB, textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: LIGHT_GRAY_RGB },
+        alternateRowStyles: { fillColor: LIGHT_BORDEAUX_RGB },
         columnStyles: {
-          0: { cellWidth: 22 }, 1: { cellWidth: 70 }, 2: { cellWidth: 30 },
-          3: { cellWidth: 24 }, 4: { cellWidth: 26 }, 5: { cellWidth: 18 }, 6: { cellWidth: 26 },
-        },
-        didDrawCell: (data) => {
-          if (data.section === "body" && data.column.index === 6) {
-            const val = data.cell.raw;
-            const colors = { "En stock": [209, 250, 229], "Stock faible": [254, 243, 199], "Rupture": [254, 226, 226] };
-            if (colors[val]) {
-              doc.setFillColor(...colors[val]);
-              doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
-              doc.setFontSize(8.5); doc.setTextColor(50);
-              doc.text(val, data.cell.x + 2, data.cell.y + data.cell.height / 2 + 1);
-            }
-          }
+          0: { cellWidth: 24 }, 1: { cellWidth: 82 }, 2: { cellWidth: 34 },
+          3: { cellWidth: 26 }, 4: { cellWidth: 28 }, 5: { cellWidth: 20 },
         },
         margin: { left: 14, right: 14, top: 44 },
         didDrawPage: () => {
@@ -383,28 +490,15 @@ function ExportMenu({ produits }) {
   }
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button className="gl-btn gl-btn-secondary" onClick={() => setOpen((v) => !v)}>
-        <IconDownload width={15} height={15} /> Exporter ▾
-      </button>
-
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid var(--gl-gray-200)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.10)", minWidth: 170, zIndex: 100, overflow: "hidden" }}>
-          <button onClick={exportExcel} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13.5, color: "var(--gl-gray-800)", textAlign: "left" }}>
-            <span style={{ fontSize: 18 }}>📗</span>
-            <div><div style={{ fontWeight: 600 }}>Excel (.xlsx)</div><div style={{ fontSize: 11, color: "var(--gl-gray-500)" }}>Tableau modifiable</div></div>
-          </button>
-          <div style={{ height: 1, background: "var(--gl-gray-100)" }} />
-          <button onClick={exportPDF} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13.5, color: "var(--gl-gray-800)", textAlign: "left" }}>
-            <span style={{ fontSize: 18 }}>📕</span>
-            <div><div style={{ fontWeight: 600 }}>PDF (.pdf)</div><div style={{ fontSize: 11, color: "var(--gl-gray-500)" }}>Tableau mis en page A4</div></div>
-          </button>
-        </div>
-      )}
-    </div>
+    <Btn variant="ghost" onClick={exportPDF}>
+      <IconDownload width={15} height={15} /> Exporter en PDF
+    </Btn>
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Composant principal
+// ═══════════════════════════════════════════════════════════════════════════
 export default function Products() {
   const [produits, setProduits]         = useState([]);
   const [allStats, setAllStats]         = useState({ total: 0, rupture: 0, faible: 0, byStatut: {} });
@@ -412,15 +506,27 @@ export default function Products() {
   const [error, setError]               = useState(null);
   const [activeCat, setActiveCat]       = useState("Tous");
   const [query, setQuery]               = useState("");
+
+  // ── Popup : fiche détail produit ──────────────────────────────────────────
+  const [viewTarget, setViewTarget]     = useState(null);
+
+  // ── Popup : formulaire ajout / modification ───────────────────────────────
   const [formModal, setFormModal]       = useState(false);
-  const [viewTarget, setViewTarget]     = useState(null);   // fiche détail / photo
   const [editTarget, setEditTarget]     = useState(null);
   const [form, setForm]                 = useState(EMPTY_FORM);
-  const [imageFile, setImageFile]       = useState(null);   // nouveau fichier sélectionné
-  const [removeImage, setRemoveImage]   = useState(false);  // suppression explicite
+  const [imageFile, setImageFile]       = useState(null);
+  const [removeImage, setRemoveImage]   = useState(false);
   const [formErr, setFormErr]           = useState("");
   const [formBusy, setFormBusy]         = useState(false);
+
+  // ── Popup : confirmation de suppression ───────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const [toast, setToast] = useState(null);
+  const notif = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3200);
+  };
 
   const fetchProduits = useCallback(async () => {
     setLoading(true); setError(null);
@@ -457,6 +563,15 @@ export default function Products() {
   useEffect(() => { fetchStats(); },   [fetchStats]);
 
   const refresh = () => { fetchProduits(); fetchStats(); };
+
+  const copierReference = async (ref) => {
+    try {
+      await navigator.clipboard.writeText(ref);
+      notif(`Référence ${ref} copiée`);
+    } catch {
+      notif("Impossible de copier la référence", "error");
+    }
+  };
 
   function openAdd() {
     setEditTarget(null); setForm(EMPTY_FORM);
@@ -508,9 +623,10 @@ export default function Products() {
       if (imageFile) fd.append("image", imageFile);
       if (removeImage) fd.append("removeImage", "true");
 
-      const res  = await fetch(url, { method, body: fd }); // pas de Content-Type manuel avec FormData
+      const res  = await fetch(url, { method, body: fd });
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
+      notif(editTarget ? "Produit mis à jour" : "Produit ajouté");
       setFormModal(false); refresh();
     } catch (e) { setFormErr(e.message); }
     finally { setFormBusy(false); }
@@ -521,8 +637,9 @@ export default function Products() {
       const res  = await fetch(`${API}/${deleteTarget.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
+      notif("Produit supprimé");
       setDeleteTarget(null); refresh();
-    } catch (e) { alert(e.message); }
+    } catch (e) { notif(e.message, "error"); }
   }
 
   const sidebar = {
@@ -534,223 +651,299 @@ export default function Products() {
         count: s === "Tous" ? allStats.total : (allStats.byStatut[s] || 0),
         onClick: () => { setActiveCat(s); setQuery(""); },
       }))},
-      { title: "Alertes", items: [{
-        key: "alerte", label: "Stock faible / Rupture", icon: IconAlert,
-        count: (allStats.rupture || 0) + (allStats.faible || 0),
-        active: false,
-        onClick: () => { setActiveCat("Tous"); setQuery(""); },
-      }]},
+      
     ],
+    promo: { title: "Traçabilité", text: "Un catalogue à jour évite les ruptures de stock imprévues." },
   };
 
+  // ───────────────────────────────────────────────────────────────────────────
   return (
     <AdminLayout sidebar={sidebar}>
-      <PageHead
-        crumb={<>Admin&nbsp;/&nbsp;<b>Produits</b></>}
-        title="Catalogue des produits"
-        description="Gérez les réactifs, consommables et matériels du catalogue."
-        actions={
-          <>
-            <ExportMenu produits={produits} />
-            <button className="gl-btn gl-btn-primary" onClick={openAdd}>
-              <IconPlus width={15} height={15} /> Ajouter un produit
-            </button>
-          </>
-        }
-      />
+      <style>{GOOGLE_FONTS_IMPORT}</style>
+      <div style={{ fontFamily: FONT_BODY, color: C.ink }}>
+        <Toast toast={toast} />
 
-      {error && (
-        <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 10, padding: "12px 16px", color: "#c53030", fontSize: 13.5, marginBottom: 16 }}>
-          ⚠️ {error}
-        </div>
-      )}
+        <PageHead
+          crumb={<>Admin&nbsp;/&nbsp;<b>Produits</b></>}
+          title="Catalogue des produits"
+          description="Gérez les réactifs, consommables et matériels du catalogue."
+          actions={
+            <>
+              <ExportPdfButton produits={produits} />
+              <Btn variant="primary" onClick={openAdd}>
+                <IconPlus width={15} height={15} /> Ajouter un produit
+              </Btn>
+            </>
+          }
+        />
 
-      <div className="gl-card gl-card-pad">
-        <div className="gl-toolbar">
-          <div className="gl-search">
-            <IconSearch width={15} height={15} />
-            <input placeholder="Rechercher par nom, référence ou marque…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
-          <select className="gl-select" value={activeCat} onChange={(e) => setActiveCat(e.target.value)}>
-            {STATUTS.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </div>
-
-        <style>{`
-          .gl-table-compact { font-size: 12.5px; table-layout: fixed; width: 100%; }
-          .gl-table-compact th, .gl-table-compact td { padding: 7px 8px !important; }
-          .gl-table-compact th { font-size: 10.5px !important; white-space: nowrap; }
-          .gl-table-compact .gl-cell-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .gl-product-cell { display: flex; align-items: center; gap: 10px; }
-          .gl-row-clickable { cursor: pointer; }
-        `}</style>
-        <div className="gl-table-wrap">
-          <table className="gl-table gl-table-compact">
-            <colgroup>
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "26%" }} />
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "7%" }} />
-              <col style={{ width: "9%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Référence</th><th>Produit</th><th>Description</th>
-                <th>Marque</th><th>Prix</th><th>Type</th><th>Stock</th><th>État</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={9}><div className="gl-empty"><p style={{ color: "var(--gl-gray-400)" }}>Chargement…</p></div></td></tr>
-              )}
-              {!loading && produits.map((p) => (
-                <tr key={p.id} className="gl-row-clickable" onClick={() => setViewTarget(p)}>
-                  <td className="gl-cell-mono">{p.reference}</td>
-                  <td>
-                    <div className="gl-product-cell">
-                      <ProductThumb src={p.image} alt={p.nom} />
-                      <span className="gl-cell-truncate" style={{ fontWeight: 600 }} title={p.nom}>{p.nom}</span>
-                    </div>
-                  </td>
-                  <td className="gl-cell-muted gl-cell-truncate" title={p.description || ""}>
-                    {p.description || <span style={{ color: "var(--gl-gray-300)" }}>—</span>}
-                  </td>
-                  <td className="gl-cell-muted gl-cell-truncate" title={p.marque}>{p.marque}</td>
-                  <td style={{ fontWeight: 600 }}>{formatPrix(p.prix)}</td>
-                  <td><TypeBadge statut={p.statut} /></td>
-                  <td className="gl-cell-muted">{p.stock} u.</td>
-                  <td><StockBadge label={p.stockLabel} /></td>
-                </tr>
-              ))}
-              {!loading && produits.length === 0 && (
-                <tr><td colSpan={9}>
-                  <div className="gl-empty">
-                    <div className="gl-empty-icon"><IconSearch width={20} height={20} /></div>
-                    <h4>Aucun produit trouvé</h4>
-                    <p>Essayez une autre recherche ou catégorie.</p>
-                  </div>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="gl-pagination">
-          <span>{produits.length} produit(s) affiché(s)</span>
-        </div>
-      </div>
-
-      {/* ── Fiche détail produit (photo + description + actions) ──────────── */}
-      <Modal
-        open={!!viewTarget} onClose={() => setViewTarget(null)}
-        title={viewTarget?.nom} subtitle={`Réf. ${viewTarget?.reference}`} size="md"
-        footer={
-          <>
-            <button className="gl-btn gl-btn-ghost" style={{ color: "#c53030" }} onClick={() => { setDeleteTarget(viewTarget); setViewTarget(null); }}>
-              <IconTrash width={14} height={14} /> Supprimer
-            </button>
-            <button className="gl-btn gl-btn-primary" onClick={() => { openEdit(viewTarget); setViewTarget(null); }}>
-              <IconEdit width={14} height={14} /> Modifier
-            </button>
-          </>
-        }
-      >
-        {viewTarget && (
-          <div style={{ display: "flex", gap: 18 }}>
-            <ProductThumb src={viewTarget.image} alt={viewTarget.nom} size={120} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <TypeBadge statut={viewTarget.statut} />
-                <StockBadge label={viewTarget.stockLabel} />
-              </div>
-              <div style={{ fontSize: 13, color: "var(--gl-gray-600)" }}>
-                <strong>Marque :</strong> {viewTarget.marque}
-              </div>
-              <div style={{ fontSize: 13, color: "var(--gl-gray-600)" }}>
-                <strong>Prix :</strong> {formatPrix(viewTarget.prix)} &nbsp;—&nbsp; <strong>Stock :</strong> {viewTarget.stock} u.
-              </div>
-              <div style={{ fontSize: 13.5, color: "var(--gl-gray-700)", lineHeight: 1.6, marginTop: 4 }}>
-                {viewTarget.description || <span style={{ color: "var(--gl-gray-400)" }}>Aucune description renseignée.</span>}
-              </div>
-            </div>
+        {error && (
+          <div style={{
+            background: C.dangerSoft, border: `1px solid ${C.dangerLine}`, borderRadius: 10,
+            padding: "12px 16px", color: C.danger, fontSize: 13.5, marginBottom: 16, fontWeight: 600,
+          }}>
+            ⚠️ {error}
           </div>
         )}
-      </Modal>
 
-      {/* ── Popup Ajout / Modification ──────────────────────────────────── */}
-      <Modal
-        open={formModal} onClose={() => setFormModal(false)}
-        title={editTarget ? "Modifier le produit" : "Ajouter un produit"}
-        subtitle={editTarget ? `Réf. ${editTarget.reference}` : "Renseignez les informations du nouvel article"}
-        size="md"
-        footer={
-          <>
-            <button className="gl-btn gl-btn-ghost" onClick={() => setFormModal(false)} disabled={formBusy}>Annuler</button>
-            <button className="gl-btn gl-btn-primary" onClick={handleSubmit} disabled={formBusy}>
-              {formBusy ? "Enregistrement…" : editTarget ? "Enregistrer" : "Ajouter le produit"}
-            </button>
-          </>
-        }
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {formErr && (
-            <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", color: "#c53030", fontSize: 13 }}>
-              {formErr}
+        {/* ═══════════════════════ TABLEAU GLOBAL (compact, style devis) ═══════════════════════ */}
+        <div style={{
+          background: C.white, borderRadius: 14, overflow: "hidden",
+          border: `1px solid ${C.line}`,
+          boxShadow: "0 1px 3px rgba(36,16,20,.04), 0 10px 28px rgba(122,31,48,.06)",
+        }}>
+          {/* Toolbar */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            padding: "10px 16px", borderBottom: `1px solid ${C.lineSoft}`,
+            background: `linear-gradient(135deg, ${C.paperSoft}, ${C.petrolSoft})`,
+          }}>
+            <span style={{
+              width: 26, height: 26, borderRadius: 7, background: C.petrol, color: C.white,
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+            }}>📦</span>
+            <span style={{
+              fontSize: 13, fontWeight: 700, color: C.petrolDark, fontFamily: FONT_DISPLAY,
+              letterSpacing: ".01em",
+            }}>Catalogue produits</span>
+
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: C.white, border: `1.5px solid ${C.petrolLine}`, borderRadius: 8,
+              padding: "5px 10px", minWidth: 220,
+            }}>
+              <IconSearch width={13} height={13} color={C.petrol} />
+              <input
+                placeholder="Rechercher par nom, référence, marque…"
+                value={query} onChange={(e) => setQuery(e.target.value)}
+                style={{ border: "none", outline: "none", fontSize: 12, fontFamily: FONT_BODY, width: "100%", background: "transparent", color: C.ink }}
+              />
             </div>
-          )}
 
-          <ImageField
-            currentUrl={editTarget?.image}
-            onFileChange={handleImageFile}
-            onRemove={handleImageRemove}
-          />
+            <select value={activeCat} onChange={(e) => setActiveCat(e.target.value)} style={{
+              padding: "5px 24px 5px 9px", borderRadius: 7,
+              border: `1.5px solid ${C.petrolLine}`, fontSize: 12, fontWeight: 600,
+              fontFamily: FONT_BODY, color: C.petrolDark, background: C.white,
+              cursor: "pointer", outline: "none",
+            }}>
+              {STATUTS.map((s) => <option key={s}>{s}</option>)}
+            </select>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Référence" name="reference" value={form.reference} onChange={handleChange} required placeholder="Ex. P-1042" />
-            <Field label="Marque" name="marque" value={form.marque} onChange={handleChange} required placeholder="Ex. BioMerieux" />
+            {loading && <span style={{ fontSize: 11.5, color: C.petrol, fontWeight: 600 }}>Chargement…</span>}
+
+            <span style={{
+              marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.petrolDark,
+              fontFamily: FONT_MONO, background: C.white, padding: "3px 10px",
+              borderRadius: 999, border: `1px solid ${C.petrolLine}`,
+            }}>
+              {produits.length} produit(s)
+            </span>
           </div>
-          <Field label="Nom du produit" name="nom" value={form.nom} onChange={handleChange} required placeholder="Ex. Réactif R-204 Buffer pH 7" />
-          <TextAreaField label="Description" name="description" value={form.description} onChange={handleChange} placeholder="Détails, composition, usage…" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <Field label="Prix (DH)" name="prix" type="number" value={form.prix} onChange={handleChange} min={0} step="0.01" required placeholder="Ex. 120.00" />
-            <Field label="Quantité en stock" name="stock" type="number" value={form.stock} onChange={handleChange} min={0} required />
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--gl-gray-600)" }}>
-                Type <span style={{ color: "#e53e3e", marginLeft: 2 }}>*</span>
-              </label>
-              <select name="statut" value={form.statut} onChange={handleChange}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--gl-gray-200)", fontSize: 13.5, background: "var(--gl-gray-50)", color: "var(--gl-gray-900)" }}>
-                <option value="Réactif">Réactif</option>
-                <option value="Consommable">Consommable</option>
-                <option value="Matériel">Matériel</option>
-              </select>
-            </div>
+
+          {/* Table compacte */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
+              <colgroup>
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "28%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "11%" }} />
+              </colgroup>
+              <thead style={{ background: C.paperSoft }}>
+                <tr>
+                  <TH>Réf.</TH>
+                  <TH>Produit</TH>
+                  <TH>Description</TH>
+                  <TH>Marque</TH>
+                  <TH center>Prix</TH>
+                  <TH center>Type</TH>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "40px 0", color: C.muted }}>
+                      Chargement…
+                    </td>
+                  </tr>
+                )}
+                {!loading && produits.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "40px 0", color: C.muted }}>
+                      <div style={{ fontSize: 30, marginBottom: 8, opacity: .6 }}>🔍</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.ink, marginBottom: 3, fontFamily: FONT_DISPLAY }}>
+                        Aucun produit trouvé
+                      </div>
+                      <div style={{ fontSize: 12 }}>Essayez une autre recherche ou catégorie.</div>
+                    </td>
+                  </tr>
+                )}
+                {!loading && produits.map((p, idx) => (
+                  <tr key={p.id}
+                    onClick={() => setViewTarget(p)}
+                    style={{ cursor: "pointer", borderBottom: idx < produits.length - 1 ? `1px solid ${C.lineSoft}` : "none", transition: "background .1s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = C.paperSoft}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                  >
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      <RefTag text={p.reference} tone={BADGE_PROD[p.statut]?.dot || C.petrol} size="xs" />
+                    </td>
+                    <td style={{ padding: "8px 8px", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <ProductThumb src={p.image} alt={p.nom} />
+                        <span style={{ fontWeight: 700, fontSize: 12.5, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={p.nom}>
+                          {p.nom}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "8px 8px", fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={p.description || ""}>
+                      {p.description || <span style={{ color: C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding: "8px 8px", fontSize: 12, color: C.inkSoft, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {p.marque}
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "center", fontWeight: 700, fontSize: 12, color: C.petrolDark, fontFamily: FONT_MONO, whiteSpace: "nowrap" }}>
+                      {formatPrix(p.prix)}
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                      <Badge label={p.statut} displayLabel={STATUT_ABBR[p.statut]} map={BADGE_PROD} size="sm" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </Modal>
 
-      {/* ── Popup Suppression ───────────────────────────────────────────── */}
-      <Modal
-        open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
-        title="Confirmer la suppression" size="sm"
-        footer={
-          <>
-            <button className="gl-btn gl-btn-ghost" onClick={() => setDeleteTarget(null)}>Annuler</button>
-            <button className="gl-btn" style={{ background: "#e53e3e", color: "#fff" }} onClick={handleDelete}>
-              Supprimer définitivement
-            </button>
-          </>
-        }
-      >
-        <p style={{ fontSize: 14, color: "var(--gl-gray-700)", lineHeight: 1.6 }}>
-          Voulez-vous vraiment supprimer <strong>{deleteTarget?.nom}</strong>{" "}
-          <span style={{ color: "var(--gl-gray-400)", fontSize: 12 }}>({deleteTarget?.reference})</span> ?
-          Cette action est irréversible.
-        </p>
-      </Modal>
+        {/* ── Popup : fiche détail produit (style bordeaux) ──────────────────── */}
+        <Modal
+          open={!!viewTarget} onClose={() => setViewTarget(null)}
+          title={viewTarget?.nom} subtitle={viewTarget && <RefTag text={viewTarget.reference} size="xs" />}
+          size="md"
+          footer={
+            <>
+              <Btn variant="red_ghost" onClick={() => { setDeleteTarget(viewTarget); setViewTarget(null); }}>
+                <IconTrash width={13} height={13} /> Supprimer
+              </Btn>
+              <Btn variant="primary" onClick={() => { const t = viewTarget; setViewTarget(null); openEdit(t); }}>
+                <IconEditOutline width={13} height={13} /> Modifier
+              </Btn>
+            </>
+          }
+        >
+          {viewTarget && (
+            <div style={{ fontFamily: FONT_BODY, color: C.ink }}>
+              <style>{GOOGLE_FONTS_IMPORT}</style>
+              <div style={{ display: "flex", gap: 18 }}>
+                <ProductThumb src={viewTarget.image} alt={viewTarget.nom} size={110} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <Badge label={viewTarget.statut} map={BADGE_PROD} />
+                    <Badge label={viewTarget.stockLabel} map={BADGE_STOCK} />
+                    <button
+                      onClick={() => copierReference(viewTarget.reference)}
+                      title="Copier la référence"
+                      style={{
+                        width: 24, height: 24, borderRadius: 6,
+                        border: `1px solid ${C.line}`, background: C.paperSoft,
+                        color: C.petrolDark, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <IconCopy size={11} />
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 13, color: C.inkSoft }}>
+                    <strong style={{ color: C.ink }}>Marque :</strong> {viewTarget.marque}
+                  </div>
+                  <div style={{ fontSize: 13, color: C.inkSoft }}>
+                    <strong style={{ color: C.ink }}>Prix :</strong>{" "}
+                    <span style={{ fontFamily: FONT_MONO, fontWeight: 700, color: C.petrolDark }}>{formatPrix(viewTarget.prix)}</span>
+                    &nbsp;—&nbsp;
+                    <strong style={{ color: C.ink }}>Stock :</strong> {viewTarget.stock} u.
+                  </div>
+                  <div style={{ fontSize: 13.5, color: C.inkSoft, lineHeight: 1.6, marginTop: 4 }}>
+                    {viewTarget.description || <Dash />}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal>
+
+        {/* ── Popup : ajout / modification (style bordeaux) ──────────────────── */}
+        <Modal
+          open={formModal} onClose={() => setFormModal(false)}
+          title={editTarget ? "Modifier le produit" : "Ajouter un produit"}
+          subtitle={editTarget ? <RefTag text={editTarget.reference} size="xs" /> : "Renseignez les informations du nouvel article"}
+          size="md"
+          footer={
+            <>
+              <Btn variant="ghost" onClick={() => setFormModal(false)} disabled={formBusy}>Annuler</Btn>
+              <Btn variant="primary" onClick={handleSubmit} disabled={formBusy}>
+                <IconCheck width={13} height={13} /> {formBusy ? "Enregistrement…" : editTarget ? "Enregistrer" : "Ajouter le produit"}
+              </Btn>
+            </>
+          }
+        >
+          <div style={{ fontFamily: FONT_BODY, color: C.ink, display: "flex", flexDirection: "column", gap: 14 }}>
+            <style>{GOOGLE_FONTS_IMPORT}</style>
+            {formErr && (
+              <div style={{ background: C.dangerSoft, border: `1px solid ${C.dangerLine}`, borderRadius: 8, padding: "10px 14px", color: C.danger, fontSize: 13, fontWeight: 600 }}>
+                {formErr}
+              </div>
+            )}
+
+            <ImageField
+              currentUrl={editTarget?.image}
+              onFileChange={handleImageFile}
+              onRemove={handleImageRemove}
+            />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Field label="Référence" name="reference" value={form.reference} onChange={handleChange} required placeholder="Ex. P-1042" />
+              <Field label="Marque" name="marque" value={form.marque} onChange={handleChange} required placeholder="Ex. BioMerieux" />
+            </div>
+            <Field label="Nom du produit" name="nom" value={form.nom} onChange={handleChange} required placeholder="Ex. Réactif R-204 Buffer pH 7" />
+            <TextAreaField label="Description" name="description" value={form.description} onChange={handleChange} placeholder="Détails, composition, usage…" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <Field label="Prix (DH)" name="prix" type="number" value={form.prix} onChange={handleChange} min={0} step="0.01" required placeholder="Ex. 120.00" />
+              <Field label="Quantité en stock" name="stock" type="number" value={form.stock} onChange={handleChange} min={0} required />
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: C.inkSoft, fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                  Type <span style={{ color: C.danger, marginLeft: 2 }}>*</span>
+                </label>
+                <select name="statut" value={form.statut} onChange={handleChange}
+                  style={{ padding: "9px 12px", borderRadius: 8, border: `1.5px solid ${C.line}`, fontSize: 13.5, background: C.paperSoft, color: C.ink, fontFamily: FONT_BODY }}>
+                  <option value="Réactif">Réactif</option>
+                  <option value="Consommable">Consommable</option>
+                  <option value="Matériel">Matériel</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </Modal>
+
+        {/* ── Popup : confirmation de suppression (style bordeaux) ───────────── */}
+        <Modal
+          open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
+          title="Confirmer la suppression" size="sm"
+          footer={
+            <>
+              <Btn variant="ghost" onClick={() => setDeleteTarget(null)}>Annuler</Btn>
+              <Btn variant="danger" onClick={handleDelete}>Supprimer définitivement</Btn>
+            </>
+          }
+        >
+          <p style={{ fontSize: 14, color: C.inkSoft, lineHeight: 1.6, fontFamily: FONT_BODY }}>
+            Voulez-vous vraiment supprimer <strong style={{ color: C.ink }}>{deleteTarget?.nom}</strong>{" "}
+            {deleteTarget && <RefTag text={deleteTarget.reference} size="xs" />} ?
+            Cette action est irréversible.
+          </p>
+        </Modal>
+      </div>
     </AdminLayout>
   );
 }

@@ -2,7 +2,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import {
   IconDashboard, IconBox, IconTag, IconFile, IconCart,
-  IconUsers, IconMessage, IconChart, IconShield,
+  IconUsers, IconMessage, IconChart, IconShield, IconSettings,
 } from "./Icons";
 
 export const RAIL_ITEMS = [
@@ -12,7 +12,7 @@ export const RAIL_ITEMS = [
   { to: "/admin/clients", label: "Clients", icon: IconUsers },
   { to: "/admin/messages", label: "Messages", icon: IconMessage },
   { to: "/admin/rapports", label: "Rapports", icon: IconChart },
-  { to: "/admin/validations", label: "Validations de comptes", icon: IconShield },
+  { to: "/admin/parametres", label: "Paramètres", icon: IconSettings },
 ];
 
 /**
