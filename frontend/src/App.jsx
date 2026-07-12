@@ -7,6 +7,7 @@ import Contact from "./client/pages/Contact";
 import Connexion from "./client/pages/Connexion";
 import Inscription from "./client/pages/Inscription";
 import DetailProduit from "./client/pages/DetailProduit";
+import Panier from "./client/pages/Panier";
 
 import AdminDashboard from "./admin/Dashboard";
 import AdminProducts from "./admin/Products";
@@ -16,9 +17,11 @@ import AdminMessages from "./admin/Messages";
 import AdminReports from "./admin/Reports";
 import AccountValidations from "./admin/AccountValidations";
 import ParametresAdmin from "./admin/ParametresAdmin";
+import { CartProvider } from "./client/context/CartContext";
 
 function App() {
   return (
+      <CartProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
@@ -29,6 +32,7 @@ function App() {
         <Route path="/connexion" element={<Connexion />} />
         <Route path="/inscription" element={<Inscription />} />
         <Route path="/produit/:id" element={<DetailProduit />} />
+        <Route path="/panier" element={<Panier />} />
 
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/produits" element={<AdminProducts />} />
@@ -43,6 +47,7 @@ function App() {
         {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
       </Routes>
     </BrowserRouter>
+    </CartProvider>
   );
 }
 

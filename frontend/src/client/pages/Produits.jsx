@@ -20,13 +20,16 @@ function Produits() {
         return res.json();
       })
       .then((data) => {
-        if (data.success) {
-          setProduits(data.produits);
-        } else {
-          setError("Impossible de charger les produits");
-        }
-        setLoading(false);
-      })
+  console.log(data);
+
+  if (data.success) {
+    setProduits(data.data); // <-- correction
+  } else {
+    setError("Impossible de charger les produits");
+  }
+
+  setLoading(false);
+})
       .catch((err) => {
         console.error(err);
         setError("Erreur serveur, réessayez plus tard");
