@@ -1,9 +1,65 @@
-import React from "react";
+import React, { useState } from "react";
 import Navbar from "../components/Navbar";
-import { FaSignInAlt, FaEnvelope, FaLock, FaEye } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import {
+  FaSignInAlt,
+  FaEnvelope,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
+} from "react-icons/fa";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 
 function Connexion() {
+  const navigate = useNavigate();
+
+  const [email, setEmail] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    if (!email || !motDePasse) {
+      alert("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:4000/api/auth/login",
+        {
+          email: email,
+          mot_de_passe: motDePasse,
+        }
+      );
+
+      if (res.data.success) {
+        localStorage.setItem("token", res.data.token);
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+
+        if (res.data.user.role === "Admin") {
+          navigate("/admin");
+        } else {
+          navigate("/");
+        }
+      }
+    } catch (error) {
+      console.log(error);
+
+      if (error.response) {
+        alert(error.response.data.message);
+      } else {
+        alert("Impossible de contacter le serveur.");
+      }
+    }
+
+    setLoading(false);
+  };
+
   return (
     <>
       <Navbar />
@@ -14,21 +70,24 @@ function Connexion() {
             <FaSignInAlt size={30} color="#980027" />
           </div>
 
-          <h1 style={styles.title}>Connexion</h1>
+          <h2 style={styles.title}>Connexion</h2>
 
           <p style={styles.subtitle}>
             Accédez à votre espace client
           </p>
 
-          <form>
+          <form onSubmit={handleLogin}>
             <div style={styles.group}>
               <label>Email</label>
 
               <div style={styles.inputContainer}>
                 <FaEnvelope style={styles.inputIcon} />
+
                 <input
                   type="email"
                   placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   style={styles.input}
                 />
               </div>
@@ -39,29 +98,43 @@ function Connexion() {
 
               <div style={styles.inputContainer}>
                 <FaLock style={styles.inputIcon} />
+
                 <input
-                  type="password"
-                  placeholder="••••••••"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="********"
+                  value={motDePasse}
+                  onChange={(e) => setMotDePasse(e.target.value)}
                   style={styles.input}
                 />
-                <FaEye style={styles.eyeIcon} />
+
+                <span
+                  style={styles.eyeIcon}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </span>
               </div>
             </div>
 
-            <button style={styles.button}>
-              Se connecter
+            <button
+              type="submit"
+              style={styles.button}
+              disabled={loading}
+            >
+              {loading ? "Connexion..." : "Se connecter"}
             </button>
           </form>
 
           <p style={styles.linkText}>
             Pas encore de compte ?
+
             <Link to="/inscription" style={styles.link}>
-              {" "}Créer un compte
+              {" "}
+              Créer un compte
             </Link>
           </p>
         </div>
       </div>
-
     </>
   );
 }
@@ -127,27 +200,29 @@ const styles = {
     right: "15px",
     top: "15px",
     color: "#94a3b8",
+    cursor: "pointer",
   },
 
- input: {
-  width: "100%",
-  padding: "14px 45px",
-  borderRadius: "10px",
-  border: "1px solid #dbe2ea",
-  fontSize: "15px",
-  boxSizing: "border-box", // IMPORTANT
-  outline: "none",
-},
+  input: {
+    width: "100%",
+    padding: "14px 45px",
+    borderRadius: "10px",
+    border: "1px solid #dbe2ea",
+    fontSize: "15px",
+    boxSizing: "border-box",
+    outline: "none",
+  },
 
   button: {
     width: "100%",
     background: "#980027",
-    color: "white",
+    color: "#fff",
     border: "none",
     padding: "15px",
     borderRadius: "10px",
-    fontWeight: "bold",
     cursor: "pointer",
+    fontWeight: "bold",
+    fontSize: "15px",
     marginTop: "10px",
   },
 
@@ -159,8 +234,8 @@ const styles = {
 
   link: {
     color: "#980027",
-    fontWeight: "600",
     textDecoration: "none",
+    fontWeight: "bold",
   },
 };
 

@@ -1,17 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import {
-  FaUserPlus,
-  FaEnvelope,
+  FaUserEdit,
   FaLock,
   FaEye,
   FaEyeSlash,
   FaPhone,
+  FaEnvelope,
 } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom";
 
-function Inscription() {
+function Profil() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -22,78 +22,146 @@ function Inscription() {
     ville: "",
     email: "",
     telephone: "",
-    mot_de_passe: "",
+  });
+
+  const [passwordData, setPasswordData] = useState({
+    ancien_mot_de_passe: "",
+    nouveau_mot_de_passe: "",
     confirmation: "",
   });
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
+  const [infoError, setInfoError] = useState("");
+  const [infoSuccess, setInfoSuccess] = useState("");
+  const [infoLoading, setInfoLoading] = useState(false);
+
+  const [pwdError, setPwdError] = useState("");
+  const [pwdSuccess, setPwdSuccess] = useState("");
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  const [userId, setUserId] = useState(null);
+
+  // Charge les infos utilisateur depuis le localStorage au montage
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+
+    if (!stored) {
+      navigate("/connexion");
+      return;
+    }
+
+    const user = JSON.parse(stored);
+    setUserId(user.id);
+
+    setFormData({
+      ice: user.ice || "",
+      nom: user.nom || "",
+      prenom: user.prenom || "",
+      nomLabo: user.nomLabo || "",
+      ville: user.ville || "",
+      email: user.email || "",
+      telephone: user.telephone || "",
+    });
+  }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleInfoSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setInfoError("");
+    setInfoSuccess("");
 
-    const {
-      ice,
-      nom,
-      prenom,
-      nomLabo,
-      ville,
-      email,
-      telephone,
-      mot_de_passe,
-      confirmation,
-    } = formData;
+    const { nom, prenom, email, telephone } = formData;
 
-    if (!nom || !prenom || !email || !telephone || !mot_de_passe) {
-      setError("Veuillez remplir tous les champs obligatoires.");
-      return;
-    }
-
-    if (mot_de_passe !== confirmation) {
-      setError("Les mots de passe ne correspondent pas.");
+    if (!nom || !prenom || !email || !telephone) {
+      setInfoError("Veuillez remplir tous les champs obligatoires.");
       return;
     }
 
     try {
-      setLoading(true);
+      setInfoLoading(true);
 
-      const res = await axios.post(
-        "http://localhost:4000/api/auth/register",
-        {
-          ice,
-          nom,
-          prenom,
-          nomLabo,
-          ville,
-          telephone,
-          email,
-          mot_de_passe,
-        }
+      const res = await axios.put(
+        `http://localhost:4000/api/auth/profil/${userId}`,
+        formData
       );
 
       if (res.data.success) {
-        setSuccess(res.data.message || "Compte créé avec succès.");
-        setTimeout(() => navigate("/connexion"), 1500);
+        setInfoSuccess(res.data.message || "Profil mis à jour avec succès.");
+
+        // Met à jour le localStorage pour que la navbar reflète le changement
+        const stored = JSON.parse(localStorage.getItem("user"));
+        const updatedUser = { ...stored, ...res.data.user };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
       } else {
-        setError(res.data.message || "Une erreur est survenue.");
+        setInfoError(res.data.message || "Une erreur est survenue.");
       }
     } catch (err) {
       const message =
         err.response?.data?.message ||
         "Erreur serveur, veuillez réessayer plus tard.";
-      setError(message);
+      setInfoError(message);
     } finally {
-      setLoading(false);
+      setInfoLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPwdError("");
+    setPwdSuccess("");
+
+    const { ancien_mot_de_passe, nouveau_mot_de_passe, confirmation } =
+      passwordData;
+
+    if (!ancien_mot_de_passe || !nouveau_mot_de_passe || !confirmation) {
+      setPwdError("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    if (nouveau_mot_de_passe !== confirmation) {
+      setPwdError("Les nouveaux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    try {
+      setPwdLoading(true);
+
+      const res = await axios.put(
+        `http://localhost:4000/api/auth/profil/${userId}/mot-de-passe`,
+        {
+          ancien_mot_de_passe,
+          nouveau_mot_de_passe,
+        }
+      );
+
+      if (res.data.success) {
+        setPwdSuccess(res.data.message || "Mot de passe mis à jour.");
+        setPasswordData({
+          ancien_mot_de_passe: "",
+          nouveau_mot_de_passe: "",
+          confirmation: "",
+        });
+      } else {
+        setPwdError(res.data.message || "Une erreur est survenue.");
+      }
+    } catch (err) {
+      const message =
+        err.response?.data?.message ||
+        "Erreur serveur, veuillez réessayer plus tard.";
+      setPwdError(message);
+    } finally {
+      setPwdLoading(false);
     }
   };
 
@@ -102,26 +170,25 @@ function Inscription() {
       <Navbar />
 
       <div style={styles.page}>
+        {/* ============ CARTE INFOS PROFIL ============ */}
         <div style={styles.card}>
           <div style={styles.iconBox}>
-            <FaUserPlus size={30} color="#980027" />
+            <FaUserEdit size={28} color="#980027" />
           </div>
 
-          <h1 style={styles.title}>Créer un compte</h1>
+          <h1 style={styles.title}>Mon profil</h1>
+          <p style={styles.subtitle}>Modifiez vos informations</p>
 
-          <p style={styles.subtitle}>Rejoignez Grand Laboratoire</p>
+          {infoError && <p style={styles.errorText}>{infoError}</p>}
+          {infoSuccess && <p style={styles.successText}>{infoSuccess}</p>}
 
-          {error && <p style={styles.errorText}>{error}</p>}
-          {success && <p style={styles.successText}>{success}</p>}
-
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleInfoSubmit}>
             <div style={styles.row}>
               <div style={styles.group}>
                 <label style={styles.label}>Prénom</label>
                 <input
                   type="text"
                   name="prenom"
-                  placeholder="Votre prénom"
                   style={styles.input}
                   value={formData.prenom}
                   onChange={handleChange}
@@ -133,7 +200,6 @@ function Inscription() {
                 <input
                   type="text"
                   name="nom"
-                  placeholder="Votre nom"
                   style={styles.input}
                   value={formData.nom}
                   onChange={handleChange}
@@ -146,7 +212,6 @@ function Inscription() {
               <input
                 type="text"
                 name="nomLabo"
-                placeholder="Nom de votre société"
                 style={styles.input}
                 value={formData.nomLabo}
                 onChange={handleChange}
@@ -158,7 +223,6 @@ function Inscription() {
               <input
                 type="text"
                 name="ville"
-                placeholder="Votre ville"
                 style={styles.input}
                 value={formData.ville}
                 onChange={handleChange}
@@ -170,7 +234,6 @@ function Inscription() {
               <input
                 type="text"
                 name="ice"
-                placeholder="Identifiant commun de l'entreprise"
                 style={styles.input}
                 value={formData.ice}
                 onChange={handleChange}
@@ -179,14 +242,11 @@ function Inscription() {
 
             <div style={styles.group}>
               <label style={styles.label}>Téléphone</label>
-
               <div style={styles.inputContainer}>
                 <FaPhone style={styles.inputIcon} />
-
                 <input
                   type="text"
                   name="telephone"
-                  placeholder="+212 ..."
                   style={styles.inputWithIcon}
                   value={formData.telephone}
                   onChange={handleChange}
@@ -196,14 +256,11 @@ function Inscription() {
 
             <div style={styles.group}>
               <label style={styles.label}>Email</label>
-
               <div style={styles.inputContainer}>
                 <FaEnvelope style={styles.inputIcon} />
-
                 <input
                   type="email"
                   name="email"
-                  placeholder="votre@email.com"
                   style={styles.inputWithIcon}
                   value={formData.email}
                   onChange={handleChange}
@@ -211,75 +268,94 @@ function Inscription() {
               </div>
             </div>
 
-            <div style={styles.group}>
-              <label style={styles.label}>Mot de passe</label>
-
-              <div style={styles.inputContainer}>
-                <FaLock style={styles.inputIcon} />
-
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="mot_de_passe"
-                  placeholder="••••••••"
-                  style={styles.inputWithIcon}
-                  value={formData.mot_de_passe}
-                  onChange={handleChange}
-                />
-
-                {showPassword ? (
-                  <FaEyeSlash
-                    style={styles.eyeIcon}
-                    onClick={() => setShowPassword(false)}
-                  />
-                ) : (
-                  <FaEye
-                    style={styles.eyeIcon}
-                    onClick={() => setShowPassword(true)}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div style={styles.group}>
-              <label style={styles.label}>Confirmer le mot de passe</label>
-
-              <div style={styles.inputContainer}>
-                <FaLock style={styles.inputIcon} />
-
-                <input
-                  type={showConfirm ? "text" : "password"}
-                  name="confirmation"
-                  placeholder="••••••••"
-                  style={styles.inputWithIcon}
-                  value={formData.confirmation}
-                  onChange={handleChange}
-                />
-
-                {showConfirm ? (
-                  <FaEyeSlash
-                    style={styles.eyeIcon}
-                    onClick={() => setShowConfirm(false)}
-                  />
-                ) : (
-                  <FaEye
-                    style={styles.eyeIcon}
-                    onClick={() => setShowConfirm(true)}
-                  />
-                )}
-              </div>
-            </div>
-
-            <button type="submit" style={styles.button} disabled={loading}>
-              {loading ? "Création en cours..." : "Créer mon compte"}
+            <button type="submit" style={styles.button} disabled={infoLoading}>
+              {infoLoading ? "Mise à jour..." : "Enregistrer les modifications"}
             </button>
           </form>
+        </div>
 
-          <p style={styles.linkText}>
-            Déjà un compte ?
-            <Link to="/connexion" style={styles.link}>
-              {" "}Se connecter
-            </Link>
-          </p>
+        {/* ============ CARTE MOT DE PASSE ============ */}
+        <div style={styles.card}>
+          <div style={styles.iconBox}>
+            <FaLock size={28} color="#980027" />
+          </div>
+
+          <h2 style={styles.title}>Changer mon mot de passe</h2>
+
+          {pwdError && <p style={styles.errorText}>{pwdError}</p>}
+          {pwdSuccess && <p style={styles.successText}>{pwdSuccess}</p>}
+
+          <form onSubmit={handlePasswordSubmit}>
+            <div style={styles.group}>
+              <label style={styles.label}>Mot de passe actuel</label>
+              <div style={styles.inputContainer}>
+                <FaLock style={styles.inputIcon} />
+                <input
+                  type={showOld ? "text" : "password"}
+                  name="ancien_mot_de_passe"
+                  style={styles.inputWithIcon}
+                  value={passwordData.ancien_mot_de_passe}
+                  onChange={handlePasswordChange}
+                />
+                {showOld ? (
+                  <FaEyeSlash
+                    style={styles.eyeIcon}
+                    onClick={() => setShowOld(false)}
+                  />
+                ) : (
+                  <FaEye
+                    style={styles.eyeIcon}
+                    onClick={() => setShowOld(true)}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={styles.group}>
+              <label style={styles.label}>Nouveau mot de passe</label>
+              <div style={styles.inputContainer}>
+                <FaLock style={styles.inputIcon} />
+                <input
+                  type={showNew ? "text" : "password"}
+                  name="nouveau_mot_de_passe"
+                  style={styles.inputWithIcon}
+                  value={passwordData.nouveau_mot_de_passe}
+                  onChange={handlePasswordChange}
+                />
+                {showNew ? (
+                  <FaEyeSlash
+                    style={styles.eyeIcon}
+                    onClick={() => setShowNew(false)}
+                  />
+                ) : (
+                  <FaEye
+                    style={styles.eyeIcon}
+                    onClick={() => setShowNew(true)}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={styles.group}>
+              <label style={styles.label}>
+                Confirmer le nouveau mot de passe
+              </label>
+              <div style={styles.inputContainer}>
+                <FaLock style={styles.inputIcon} />
+                <input
+                  type={showNew ? "text" : "password"}
+                  name="confirmation"
+                  style={styles.inputWithIcon}
+                  value={passwordData.confirmation}
+                  onChange={handlePasswordChange}
+                />
+              </div>
+            </div>
+
+            <button type="submit" style={styles.button} disabled={pwdLoading}>
+              {pwdLoading ? "Mise à jour..." : "Changer le mot de passe"}
+            </button>
+          </form>
         </div>
       </div>
     </>
@@ -291,9 +367,10 @@ const styles = {
     minHeight: "100vh",
     background: "#f8fafc",
     display: "flex",
-    justifyContent: "center",
+    flexDirection: "column",
     alignItems: "center",
-    padding: "120px 20px 40px",
+    gap: "30px",
+    padding: "120px 20px 60px",
   },
 
   card: {
@@ -307,9 +384,9 @@ const styles = {
   },
 
   iconBox: {
-    width: "70px",
-    height: "70px",
-    borderRadius: "18px",
+    width: "60px",
+    height: "60px",
+    borderRadius: "16px",
     background: "#fdecef",
     display: "flex",
     justifyContent: "center",
@@ -419,20 +496,7 @@ const styles = {
     fontSize: "16px",
     cursor: "pointer",
     marginTop: "10px",
-    opacity: 1,
-  },
-
-  linkText: {
-    textAlign: "center",
-    marginTop: "25px",
-    color: "#64748b",
-  },
-
-  link: {
-    color: "#980027",
-    textDecoration: "none",
-    fontWeight: "600",
   },
 };
 
-export default Inscription;
+export default Profil;

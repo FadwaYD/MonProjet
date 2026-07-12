@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
@@ -10,7 +10,62 @@ import {
   FaQuestionCircle,
 } from "react-icons/fa";
 
+const API_URL = "http://localhost:4000/api/contacts";
+
 function Contact() {
+  const [formData, setFormData] = useState({
+    nom: "",
+    email: "",
+    sujet: "",
+    message: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!formData.nom || !formData.email || !formData.sujet || !formData.message) {
+      setError("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    setLoading(true);
+
+    fetch(API_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(formData),
+})
+  .then(async (res) => {
+    const text = await res.text(); // texte brut, pas .json()
+    console.log("Status:", res.status);
+    console.log("Réponse brute:", text);
+    return JSON.parse(text);
+  })
+  .then((data) => {
+    setLoading(false);
+    setSuccess(data.message);
+    setFormData({ nom: "", email: "", sujet: "", message: "" });
+  })
+  .catch((err) => {
+    console.error(err);
+    setLoading(false);
+    setError("Erreur serveur, réessayez plus tard.");
+  });
+  };
+
   return (
     <>
       <Navbar />
@@ -29,16 +84,22 @@ function Contact() {
       <section style={styles.section}>
         <div style={styles.container}>
           {/* FORMULAIRE */}
-          <div style={styles.formCard}>
+          <form style={styles.formCard} onSubmit={handleSubmit}>
             <h2 style={styles.title}>
               <FaPaperPlane color="#8b0020" /> Envoyer un message
             </h2>
+
+            {success && <div style={styles.successMsg}>{success}</div>}
+            {error && <div style={styles.errorMsg}>{error}</div>}
 
             <div style={styles.row}>
               <div style={styles.inputGroup}>
                 <label>Nom complet</label>
                 <input
                   type="text"
+                  name="nom"
+                  value={formData.nom}
+                  onChange={handleChange}
                   style={styles.input}
                 />
               </div>
@@ -47,6 +108,9 @@ function Contact() {
                 <label>Email</label>
                 <input
                   type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
                   style={styles.input}
                 />
               </div>
@@ -56,6 +120,9 @@ function Contact() {
               <label>Sujet</label>
               <input
                 type="text"
+                name="sujet"
+                value={formData.sujet}
+                onChange={handleChange}
                 style={styles.input}
               />
             </div>
@@ -64,15 +131,18 @@ function Contact() {
               <label>Message</label>
               <textarea
                 rows="6"
+                name="message"
+                value={formData.message}
+                onChange={handleChange}
                 style={styles.textarea}
               ></textarea>
             </div>
 
-            <button style={styles.button}>
+            <button type="submit" style={styles.button} disabled={loading}>
               <FaPaperPlane />
-              Envoyer le message
+              {loading ? "Envoi en cours..." : "Envoyer le message"}
             </button>
-          </div>
+          </form>
 
           {/* SIDEBAR */}
           <div style={styles.sidebar}>
@@ -191,6 +261,22 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "10px",
+  },
+
+  successMsg: {
+    background: "#dcfce7",
+    color: "#15803d",
+    padding: "12px",
+    borderRadius: "8px",
+    marginBottom: "15px",
+  },
+
+  errorMsg: {
+    background: "#fee2e2",
+    color: "#b91c1c",
+    padding: "12px",
+    borderRadius: "8px",
+    marginBottom: "15px",
   },
 
   row: {
