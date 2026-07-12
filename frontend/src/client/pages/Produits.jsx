@@ -20,16 +20,20 @@ function Produits() {
         return res.json();
       })
       .then((data) => {
-        if (data.success) {
-          setProduits(data.produits);
+        // Protection : on vérifie que data.data est bien un tableau
+        if (data.success && Array.isArray(data.data)) {
+          setProduits(data.data);
         } else {
+          console.error("Réponse API inattendue:", data);
           setError("Impossible de charger les produits");
+          setProduits([]); // évite tout undefined
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error(err);
         setError("Erreur serveur, réessayez plus tard");
+        setProduits([]); // évite tout undefined
         setLoading(false);
       });
   }, []);
@@ -37,7 +41,7 @@ function Produits() {
   // Génère la liste des catégories (statut) dynamiquement depuis les produits
   const categories = [
     "Tous",
-    ...Array.from(new Set(produits.map((p) => p.statut))).filter(Boolean),
+    ...Array.from(new Set((produits || []).map((p) => p.statut))).filter(Boolean),
   ];
 
   const getImageUrl = (image) => {
@@ -45,7 +49,7 @@ function Produits() {
     return image; // déjà une URL complète venant du backend
   };
 
-  const produitsFiltres = produits.filter((produit) => {
+  const produitsFiltres = (produits || []).filter((produit) => {
     const categorieOk =
       categorieActive === "Tous" || produit.statut === categorieActive;
 
