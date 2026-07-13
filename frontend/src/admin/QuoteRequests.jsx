@@ -427,7 +427,7 @@ export default function QuoteRequests() {
     setDatesPeremption({});
   };
 
-  // ── Changer statut (utilisé pour "En attente") ──────────────────────────────
+  // ── Changer statut (utilisé pour "En attente" et "Annulée") ─────────────────
   const changerStatut = async (id, statut) => {
     setActionLoad(true);
     try {
@@ -1108,6 +1108,14 @@ export default function QuoteRequests() {
                         <Btn variant="ghost" disabled={actionLoad || confirmSendLoad || selected.statut === "En attente"}
                           onClick={() => changerStatut(selected.id, "En attente")}>
                           <IconClock width={13} height={13} /> {actionLoad ? "…" : "En attente"}
+                        </Btn>
+                      )}
+                      {/* Bouton "Annuler" : passe le devis en statut "Annulée". Visible tant que
+                          le devis n'est pas déjà annulé (permet d'annuler même un devis confirmé). */}
+                      {selected.statut !== "Annulée" && (
+                        <Btn variant="red_ghost" disabled={actionLoad || confirmSendLoad}
+                          onClick={() => changerStatut(selected.id, "Annulée")}>
+                          <IconX width={13} height={13} /> {actionLoad ? "…" : "Annuler"}
                         </Btn>
                       )}
                       <Btn variant="primary" disabled={actionLoad || confirmSendLoad || selected.statut === "Confirmée"}

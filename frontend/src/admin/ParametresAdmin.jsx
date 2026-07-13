@@ -1,11 +1,14 @@
 /**
  * ParametresAdmin.jsx
- * ── Design (thème Bordeaux, aligné sur Products.jsx / Customers.jsx) ──────
- * Reprend l'identité visuelle du back-office :
+ * ── Design v2 (thème Bordeaux, aligné sur Products.jsx / Customers.jsx) ────
+ * Refonte visuelle :
+ *   - Suppression du panneau latéral sombre (sidebar interne à la carte)
+ *   - Nouveau header horizontal : avatar + identité + badge rôle
+ *   - Navigation par onglets en pastilles ("pills") sous le header
+ *   - Carte pleine largeur, contenu centré, plus aéré
  *   - Palette "cave à vin" (bordeaux profond / lie-de-vin / doré cire-de-bouchon)
- *   - Typographie Space Grotesk (titres) + Inter (corps) + IBM Plex Mono (réf)
+ *   - Typographie Space Grotesk (titres) + Inter (corps)
  *   - Toasts au lieu des alert() natifs
- *   - Onglets Informations / Sécurité
  * Aucune logique métier (endpoints, champs) n'a été modifiée.
  */
 
@@ -24,7 +27,6 @@ function getToken() {
 // ─── Design tokens (identiques à Products.jsx / Customers.jsx) ──────────────
 const FONT_DISPLAY = "'Space Grotesk', 'Inter', sans-serif";
 const FONT_BODY    = "'Inter', -apple-system, sans-serif";
-const FONT_MONO    = "'IBM Plex Mono', 'SFMono-Regular', monospace";
 
 const C = {
   ink:        "#241014",
@@ -77,6 +79,13 @@ function IconCheck({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+function IconShield({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
     </svg>
   );
 }
@@ -141,34 +150,34 @@ function Field({ label, name, type = "text", value, onChange, required, placehol
   );
 }
 
-function Avatar({ nom, prenom, size = 64 }) {
+function Avatar({ nom, prenom, size = 56 }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0,
       background: `linear-gradient(135deg, ${C.petrol}, ${C.petrolDark})`,
       color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
       fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: size * 0.34,
-      boxShadow: "0 4px 14px rgba(122,31,48,.3)",
+      boxShadow: "0 4px 14px rgba(122,31,48,.25)",
     }}>
       {`${(nom || " ")[0]}${(prenom || " ")[0]}`.toUpperCase()}
     </div>
   );
 }
 
-// ─── ONGLET (nav latéral interne à la carte) ─────────────────────────────────
-function Tab({ active, onClick, icon: Icon, children }) {
+// ─── Onglet en pastille (nouvelle navigation horizontale) ────────────────────
+function PillTab({ active, onClick, icon: Icon, children }) {
   return (
     <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 9,
-      padding: "10px 14px", borderRadius: 9, width: "100%",
-      border: "none", cursor: "pointer", textAlign: "left",
-      fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700,
-      background: active ? C.petrolSoft : "transparent",
-      color: active ? C.petrolDark : C.inkSoft,
-      boxShadow: active ? `inset 0 0 0 1.5px ${C.petrolLine}` : "none",
-      transition: "background .12s, color .12s",
+      display: "inline-flex", alignItems: "center", gap: 8,
+      padding: "9px 18px", borderRadius: 999,
+      border: active ? `1.5px solid ${C.petrol}` : `1.5px solid ${C.line}`,
+      cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700,
+      background: active ? C.petrol : C.white,
+      color: active ? C.white : C.inkSoft,
+      boxShadow: active ? "0 4px 12px rgba(122,31,48,.22)" : "none",
+      transition: "all .14s ease",
     }}>
-      <Icon size={15} />
+      <Icon size={14} />
       {children}
     </button>
   );
@@ -270,7 +279,7 @@ export default function ParametresAdmin() {
     }
   }
 
-  // ── Sidebar ──────────────────────────────────────────────────────────────
+  // ── Sidebar (menu global de l'admin, conservé — indépendant de la carte) ──
   const sidebar = {
     eyebrow: "Administration",
     title: "Paramètres",
@@ -291,7 +300,7 @@ export default function ParametresAdmin() {
   return (
     <AdminLayout sidebar={sidebar}>
       <style>{GOOGLE_FONTS_IMPORT}</style>
-      <div style={{ fontFamily: FONT_BODY, color: C.ink }}>
+      <div style={{ fontFamily: FONT_BODY, color: C.ink, marginBottom: "auto", alignSelf: "flex-start", width: "100%" }}>
         <Toast toast={toast} />
 
         <PageHead
@@ -300,50 +309,66 @@ export default function ParametresAdmin() {
           description="Gérez vos informations personnelles et la sécurité de votre accès."
         />
 
+        {/* ── Carte unique, pleine largeur, sans panneau latéral ────────── */}
         <div style={{
           background: C.white, borderRadius: 14, overflow: "hidden",
           border: `1px solid ${C.line}`,
           boxShadow: "0 1px 3px rgba(36,16,20,.04), 0 10px 28px rgba(122,31,48,.06)",
-          display: "flex", minHeight: 480,
         }}>
-          {/* ── Panneau latéral interne (avatar + onglets) ────────────────── */}
+          {/* ── Header horizontal : avatar + identité + badge rôle ────────── */}
           <div style={{
-            width: 240, flexShrink: 0,
-            background: `linear-gradient(160deg, ${C.petrolDark} 0%, ${C.petrol} 100%)`,
-            padding: "36px 22px", display: "flex", flexDirection: "column", alignItems: "center",
+            display: "flex", alignItems: "center", gap: 16,
+            padding: "28px 32px", background: C.paperSoft,
+            borderBottom: `1px solid ${C.line}`,
           }}>
             {loading ? (
-              <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(255,255,255,.15)" }} />
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.sageSoft }} />
             ) : (
-              <Avatar nom={profil.nom} prenom={profil.prenom} size={64} />
+              <Avatar nom={profil.nom} prenom={profil.prenom} size={56} />
             )}
-            <div style={{ marginTop: 14, textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.white, fontFamily: FONT_DISPLAY }}>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, fontFamily: FONT_DISPLAY, color: C.ink }}>
                 {profil.prenom || "Admin"} {profil.nom}
               </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)", textTransform: "uppercase", letterSpacing: ".06em", marginTop: 3 }}>
-                Administrateur
+              <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 2 }}>
+                {profil.email || "—"}
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", marginTop: 30 }}>
-              <TabWhite active={activeTab === "profil"} onClick={() => setActiveTab("profil")} icon={IconUser}>
-                Informations
-              </TabWhite>
-              <TabWhite active={activeTab === "securite"} onClick={() => setActiveTab("securite")} icon={IconLock}>
-                Sécurité
-              </TabWhite>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 999,
+              background: C.clayLine ? C.claySoft : C.petrolSoft,
+              border: `1px solid ${C.clayLine}`,
+              color: "#7A5A1E", fontSize: 11, fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: ".05em",
+              flexShrink: 0,
+            }}>
+              <IconShield size={12} /> Administrateur
             </div>
           </div>
 
+          {/* ── Navigation par pastilles ───────────────────────────────── */}
+          <div style={{
+            display: "flex", gap: 10, padding: "20px 32px 0",
+          }}>
+            <PillTab active={activeTab === "profil"} onClick={() => setActiveTab("profil")} icon={IconUser}>
+              Informations
+            </PillTab>
+            <PillTab active={activeTab === "securite"} onClick={() => setActiveTab("securite")} icon={IconLock}>
+              Sécurité
+            </PillTab>
+          </div>
+
           {/* ── Contenu ─────────────────────────────────────────────────── */}
-          <div style={{ flex: 1, padding: "36px 40px" }}>
+          <div style={{ padding: "28px 32px 36px" }}>
             {loading ? (
               <div style={{ color: C.muted, fontSize: 13.5 }}>Chargement du profil…</div>
             ) : activeTab === "profil" ? (
               <>
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: FONT_DISPLAY, color: C.ink }}>
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: FONT_DISPLAY, color: C.ink }}>
                     Informations personnelles
                   </div>
                   <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 3 }}>
@@ -351,7 +376,7 @@ export default function ParametresAdmin() {
                   </div>
                 </div>
 
-                <form onSubmit={handleProfilSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
+                <form onSubmit={handleProfilSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <Field label="Prénom" name="prenom" value={profil.prenom}
                       onChange={(e) => setProfil((p) => ({ ...p, prenom: e.target.value }))} required />
@@ -380,8 +405,8 @@ export default function ParametresAdmin() {
               </>
             ) : (
               <>
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: FONT_DISPLAY, color: C.ink }}>
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: FONT_DISPLAY, color: C.ink }}>
                     Sécurité du compte
                   </div>
                   <div style={{ fontSize: 12.5, color: C.inkSoft, marginTop: 3 }}>
@@ -389,7 +414,7 @@ export default function ParametresAdmin() {
                   </div>
                 </div>
 
-                <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
+                <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
                   <Field label="Mot de passe actuel" name="ancien_mdp" type="password"
                     value={passwordForm.ancien_mdp}
                     onChange={(e) => setPasswordForm((p) => ({ ...p, ancien_mdp: e.target.value }))}
@@ -425,24 +450,5 @@ export default function ParametresAdmin() {
         </div>
       </div>
     </AdminLayout>
-  );
-}
-
-// ─── Onglet blanc (sur fond bordeaux du panneau latéral) ─────────────────────
-function TabWhite({ active, onClick, icon: Icon, children }) {
-  return (
-    <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 9,
-      padding: "10px 14px", borderRadius: 9, width: "100%",
-      border: "none", cursor: "pointer", textAlign: "left",
-      fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700,
-      background: active ? "rgba(255,255,255,.16)" : "transparent",
-      color: active ? C.white : "rgba(255,255,255,.7)",
-      boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,.25)" : "none",
-      transition: "background .12s, color .12s",
-    }}>
-      <Icon size={15} />
-      {children}
-    </button>
   );
 }

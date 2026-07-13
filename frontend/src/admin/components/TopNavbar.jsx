@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import useOutsideClick from "./useOutsideClick";
 import {
   IconBell, IconMail, IconSearch, IconChevronDown,
-  IconLogout, IconSettings, IconUser,
+  IconLogout, IconCheck, IconX,
 } from "./Icons";
 
 const API_URL = "http://localhost:4000";
@@ -12,20 +12,92 @@ const API_URL = "http://localhost:4000";
 const AVATAR_COLORS = ["#7C3AED", "#0EA5E9", "#F59E0B", "#EF4444", "#10B981", "#EC4899"];
 const getAvatarColor = (id) => AVATAR_COLORS[id % AVATAR_COLORS.length];
 
+// Clé localStorage pour la liste "à faire" (100% front-end, propre à ce navigateur)
+const TODO_KEY = "gl_todos";
+
+// Raccourcis de recherche rapide — adapte les chemins si tes routes diffèrent
+const QUICK_LINKS = [
+  { label: "Tableau de bord", path: "/admin" },
+  { label: "Produits", path: "/admin/produits" },
+  { label: "Demandes de devis", path: "/admin/devis" },
+  { label: "Clients", path: "/admin/clients" },
+  { label: "Messages", path: "/admin/messages" },
+];
+
+// Actions rapides — raccourcis de création, accessibles depuis n'importe quelle page
+// (adapte les chemins/paramètres si tes pages gèrent la création différemment)
+
+
 /**
  * Barre de navigation supérieure — reste strictement identique sur
  * l'ensemble des pages admin, y compris ses pop-up (notifications,
- * messages, profil).
+ * messages, profil, à-faire, recherche).
  */
 export default function TopNavbar() {
-  const [openMenu, setOpenMenu] = useState(null); // "notif" | "mail" | "profile" | null
+  const navigate = useNavigate();
+  const [openMenu, setOpenMenu] = useState(null); // "notif" | "mail" | "profile" | "todo" | "search" | "actions" | null
   const [notifications, setNotifications] = useState([]);
   const [loadingNotif, setLoadingNotif] = useState(true);
   const [messages, setMessages] = useState([]);
   const [loadingMail, setLoadingMail] = useState(true);
   const ref = useOutsideClick(!!openMenu, () => setOpenMenu(null));
 
+  // ── Horloge live (JJ/MM/AAAA à HH:MM, convention du projet) ────────────────
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Liste "à faire" — persistée en localStorage, propre au navigateur ──────
+  const [todos, setTodos] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(TODO_KEY)) || [];
+    } catch {
+      return [];
+    }
+  });
+  const [newTodo, setNewTodo] = useState("");
+  const todoInputRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem(TODO_KEY, JSON.stringify(todos));
+  }, [todos]);
+
+  const addTodo = () => {
+    const text = newTodo.trim();
+    if (!text) return;
+    setTodos((prev) => [{ id: Date.now(), text, done: false }, ...prev]);
+    setNewTodo("");
+    todoInputRef.current?.focus();
+  };
+  const toggleTodo = (id) =>
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const removeTodo = (id) =>
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+
+  const pendingTodos = todos.filter((t) => !t.done).length;
+
+  // ── Recherche rapide ─────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredLinks = QUICK_LINKS.filter((l) =>
+    l.label.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+  const goToLink = (path) => {
+    setOpenMenu(null);
+    setSearchQuery("");
+    navigate(path);
+  };
+
   const toggle = (name) => setOpenMenu((cur) => (cur === name ? null : name));
+
+  // ── Déconnexion : purge la session et renvoie vers l'écran de connexion ────
+  const deconnecter = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setOpenMenu(null);
+    navigate("/login");
+  };
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -99,9 +171,109 @@ export default function TopNavbar() {
             <span>Espace administration</span>
           </div>
         </Link>
+        <span className="gl-clock" title="Date et heure actuelles">
+          {formatDateTime(now)}
+        </span>
       </div>
 
       <div className="gl-topbar-right" ref={ref}>
+      
+
+        {/* ── Recherche rapide ── */}
+        <div className="gl-popover-wrap">
+          <button className="gl-icon-btn" onClick={() => toggle("search")} aria-label="Recherche">
+            <IconSearch width={19} height={19} />
+          </button>
+          {openMenu === "search" && (
+            <div className="gl-popover gl-popover-wa">
+              <div className="gl-popover-head">
+                <h4>Recherche rapide</h4>
+              </div>
+              <div style={{ padding: 10, background: "#fff" }}>
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Aller à une page…"
+                  className="gl-search-input"
+                />
+              </div>
+              <div className="gl-popover-list">
+                {filteredLinks.length === 0 ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Aucune page correspondante.</p>
+                  </div>
+                ) : (
+                  filteredLinks.map((l) => (
+                    <button
+                      key={l.path}
+                      className="gl-popover-item"
+                      style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+                      onClick={() => goToLink(l.path)}
+                    >
+                      <div className="txt">
+                        <div className="txt-row"><strong>{l.label}</strong></div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── À faire ── */}
+        <div className="gl-popover-wrap">
+          <button className="gl-icon-btn" onClick={() => toggle("todo")} aria-label="À faire">
+            <IconCheck width={19} height={19} />
+            {pendingTodos > 0 && <span className="dot" />}
+          </button>
+          {openMenu === "todo" && (
+            <div className="gl-popover gl-popover-wa">
+              <div className="gl-popover-head">
+                <h4>
+                  À faire
+                  {pendingTodos > 0 && <span className="count-badge">{pendingTodos}</span>}
+                </h4>
+              </div>
+              <div style={{ display: "flex", gap: 6, padding: 10, background: "#fff", borderBottom: "1px solid #f2f2f2" }}>
+                <input
+                  ref={todoInputRef}
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addTodo()}
+                  placeholder="Ajouter une tâche…"
+                  className="gl-search-input"
+                />
+                <button className="gl-todo-add-btn" onClick={addTodo}>+</button>
+              </div>
+              <div className="gl-popover-list">
+                {todos.length === 0 ? (
+                  <div className="gl-popover-item gl-popover-empty">
+                    <p>Aucune tâche pour le moment.</p>
+                  </div>
+                ) : (
+                  todos.map((t) => (
+                    <div key={t.id} className="gl-todo-item">
+                      <button
+                        className={`gl-todo-check ${t.done ? "done" : ""}`}
+                        onClick={() => toggleTodo(t.id)}
+                        aria-label="Marquer comme terminé"
+                      >
+                        {t.done && <IconCheck width={11} height={11} />}
+                      </button>
+                      <span className={`gl-todo-text ${t.done ? "done" : ""}`}>{t.text}</span>
+                      <button className="gl-todo-remove" onClick={() => removeTodo(t.id)} aria-label="Supprimer">
+                        <IconX width={12} height={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="gl-popover-wrap">
           <button className="gl-icon-btn" onClick={() => toggle("mail")} aria-label="Messages">
             <IconMail width={19} height={19} />
@@ -206,10 +378,9 @@ export default function TopNavbar() {
           </button>
           {openMenu === "profile" && (
             <div className="gl-popover gl-popover-sm" style={{ padding: "6px 0" }}>
-              <button className="gl-menu-item"><IconUser width={16} height={16} /> Mon profil</button>
-              <button className="gl-menu-item"><IconSettings width={16} height={16} /> Paramètres</button>
-              <div className="gl-menu-sep" />
-              <button className="gl-menu-item danger"><IconLogout width={16} height={16} /> Déconnexion</button>
+              <button className="gl-menu-item danger" onClick={deconnecter}>
+                <IconLogout width={16} height={16} /> Déconnexion
+              </button>
             </div>
           )}
         </div>
@@ -219,7 +390,7 @@ export default function TopNavbar() {
 }
 
 /**
- * Formate une date SQL en "JJ/MM/AAAA à HH:MM"
+ * Formate une date SQL/Date en "JJ/MM/AAAA à HH:MM"
  */
 function formatDateTime(dateString) {
   const date = new Date(dateString);
@@ -229,6 +400,86 @@ function formatDateTime(dateString) {
 }
 
 const notifStyles = `
+.gl-clock {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a5a63;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid #eee;
+  white-space: nowrap;
+}
+.gl-search-input {
+  flex: 1;
+  border: 1.5px solid #eee;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.gl-search-input:focus {
+  border-color: #7a1f2b;
+}
+.gl-todo-add-btn {
+  width: 34px;
+  border-radius: 8px;
+  border: none;
+  background: #7a1f2b;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.gl-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f2f2f2;
+}
+.gl-todo-check {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid #ddd;
+  background: #fff;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gl-todo-check.done {
+  background: #7a1f2b;
+  border-color: #7a1f2b;
+}
+.gl-todo-text {
+  flex: 1;
+  font-size: 13px;
+  color: #222;
+}
+.gl-todo-text.done {
+  color: #aaa;
+  text-decoration: line-through;
+}
+.gl-todo-remove {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #bbb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gl-todo-remove:hover {
+  background: #f7e7e5;
+  color: #a8433d;
+}
 .gl-popover-wa {
   width: 340px;
   border-radius: 14px;

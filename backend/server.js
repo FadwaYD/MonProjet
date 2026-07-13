@@ -17,7 +17,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ─── Routes Auth ──────────────────────────────────────────────────────────────
 app.use("/api/auth", require("./routes/authRoutes"));
-
+const adminSettingsRoutes = require("./routes/admin/adminSettingsRoutes");
+app.use("/api/admin", adminSettingsRoutes);
 // ─── Routes Admin ─────────────────────────────────────────────────────────────
 const reportRoutes = require("./routes/admin/reportRoutes");
 const notificationRoutes = require("./routes/admin/notificationRoutes");
