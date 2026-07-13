@@ -371,8 +371,7 @@ export default function TopNavbar() {
           <button className="gl-profile-btn" onClick={() => toggle("profile")}>
             <div className="gl-avatar">NM</div>
             <div className="gl-profile-info">
-              <strong>Nouhaila M.</strong>
-              <span>Administrateur</span>
+              <strong>Administrateur</strong>
             </div>
             <IconChevronDown width={15} height={15} />
           </button>
