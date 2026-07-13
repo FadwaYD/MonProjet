@@ -9,6 +9,7 @@ import {
   FaFileInvoice,
 } from "react-icons/fa";
 import { Link, useParams } from "react-router-dom";
+import { useCart } from "../context/CartContext";
 
 const API_URL = "http://localhost:4000/api/produits";
 
@@ -21,6 +22,9 @@ function DetailProduit() {
   const [error, setError] = useState(null);
 
   const [quantite, setQuantite] = useState(1);
+
+  // ✅ Hook appelé à l'intérieur du composant
+  const { ajouterAuPanier, messagePanier } = useCart();
 
   useEffect(() => {
     setLoading(true);
@@ -42,16 +46,13 @@ function DetailProduit() {
         setProduit(data);
         setLoading(false);
 
-        // Tous les autres produits (sauf le produit courant)
         fetch(API_URL)
           .then((res) => res.json())
           .then((listResult) => {
             const liste = listResult.data || [];
-
             const autres = liste.filter(
               (p) => String(p.id) !== String(data.id)
             );
-
             setSimilaires(autres);
           })
           .catch(() => setSimilaires([]));
@@ -202,6 +203,11 @@ function DetailProduit() {
               de devis.
             </div>
 
+            {/* ✅ Message d'erreur/avertissement du panier */}
+            {messagePanier && (
+              <div style={styles.messageErreur}>{messagePanier}</div>
+            )}
+
             <div style={styles.actions}>
               <div style={styles.qty}>
                 <button
@@ -215,13 +221,25 @@ function DetailProduit() {
 
                 <button
                   style={styles.qtyBtn}
-                  onClick={() => setQuantite(quantite + 1)}
+                  onClick={() =>
+                    quantite < produit.stock && setQuantite(quantite + 1)
+                  }
+                  disabled={quantite >= produit.stock}
                 >
                   +
                 </button>
               </div>
 
-              <button style={styles.cartBtn}>
+              {/* ✅ onClick correctement placé sur le bouton */}
+              <button
+                style={{
+                  ...styles.cartBtn,
+                  opacity: produit.stock <= 0 ? 0.5 : 1,
+                  cursor: produit.stock <= 0 ? "not-allowed" : "pointer",
+                }}
+                onClick={() => ajouterAuPanier(produit, quantite)}
+                disabled={produit.stock <= 0}
+              >
                 <FaShoppingCart />
                 Ajouter au panier
               </button>
@@ -455,6 +473,14 @@ const styles = {
     borderRadius: "10px",
     fontSize: "14px",
     lineHeight: 1.5,
+  },
+
+  messageErreur: {
+    background: "#fef3c7",
+    color: "#92400e",
+    padding: "12px 15px",
+    borderRadius: "10px",
+    fontSize: "14px",
   },
 
   actions: {

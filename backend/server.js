@@ -39,6 +39,10 @@ app.use("/api/commandes", require("./routes/admin/commandeRoutes"));
 app.use("/api/produits",  require("./routes/client/produitRoutes"));
 app.use("/api/contacts",  require("./routes/client/contactRoutes"));
 
+
+const commandeRoutes = require("./routes/client/commandeRoutes");
+app.use("/api/commande", commandeRoutes);   // <-- sans "s"
+
 // ─── Route principale ─────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
   res.send("Serveur Node.js fonctionne");
@@ -51,7 +55,9 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
-
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route non trouvée: ${req.method} ${req.originalUrl}` });
+});
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`✅  API démarrée sur http://localhost:${PORT}`));

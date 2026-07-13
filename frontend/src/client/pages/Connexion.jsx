@@ -7,11 +7,15 @@ import {
   FaEye,
   FaEyeSlash,
 } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 function Connexion() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Page d'origine (ex: "/panier") si l'utilisateur a été redirigé ici, sinon "/"
+  const from = location.state?.from || "/";
 
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
@@ -44,7 +48,8 @@ function Connexion() {
         if (res.data.user.role === "Admin") {
           navigate("/admin");
         } else {
-          navigate("/");
+          // ✅ Redirige vers la page d'origine (ex: /panier) au lieu de toujours "/"
+          navigate(from, { replace: true });
         }
       }
     } catch (error) {
