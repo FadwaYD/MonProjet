@@ -73,18 +73,19 @@ exports.getStats = async (req, res) => {
   }
 };
 
-// GET /api/admin/dashboard/weekly-sales
-exports.getWeeklySales = async (req, res) => {
+// GET /api/admin/dashboard/weekly-devis
+// Un "devis généré" = une commande confirmée (statut = 'Confirmée'), comptée par jour.
+exports.getWeeklyDevis = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT DATE(date_commande) AS jour, SUM(total) AS total
+      `SELECT DATE(date_commande) AS jour, COUNT(*) AS total
        FROM commandes
-       WHERE date_commande >= CURDATE() - INTERVAL 6 DAY AND statut != 'Annulée'
+       WHERE date_commande >= CURDATE() - INTERVAL 6 DAY AND statut = 'Confirmée'
        GROUP BY DATE(date_commande)
        ORDER BY jour ASC`
     );
 
-    // Génère les 7 derniers jours (avec 0 pour les jours sans commande)
+    // Génère les 7 derniers jours (avec 0 pour les jours sans devis)
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -100,8 +101,8 @@ exports.getWeeklySales = async (req, res) => {
 
     res.status(200).json({ success: true, data: days });
   } catch (err) {
-    console.error("Erreur getWeeklySales:", err);
-    res.status(500).json({ success: false, message: "Erreur serveur lors du calcul des ventes hebdomadaires." });
+    console.error("Erreur getWeeklyDevis:", err);
+    res.status(500).json({ success: false, message: "Erreur serveur lors du calcul des devis hebdomadaires." });
   }
 };
 

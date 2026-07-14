@@ -21,7 +21,7 @@ const guideSections = [
   {
     icon: IconChart,
     title: "Tableau de bord",
-    text: "Vue d'ensemble de l'activité : ventes du mois, messages non traités, commandes en cours et nouveaux clients. Le graphique affiche le total facturé par jour sur les 7 derniers jours.",
+    text: "Vue d'ensemble de l'activité : ventes du mois, messages non traités, commandes en cours et nouveaux clients. Le graphique affiche le nombre de devis générés par jour sur les 7 derniers jours.",
   },
   {
     icon: IconBox,
@@ -53,7 +53,7 @@ const guideSections = [
 export default function Dashboard() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  const [weekly, setWeekly] = useState([]);
+  const [weeklyDevis, setWeeklyDevis] = useState([]);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -65,18 +65,18 @@ export default function Dashboard() {
       try {
         const headers = { Authorization: `Bearer ${localStorage.getItem("token") || ""}` };
 
-        const [statsRes, weeklyRes, activityRes] = await Promise.all([
+        const [statsRes, weeklyDevisRes, activityRes] = await Promise.all([
           fetch(`${API_URL}/api/admin/dashboard/stats`, { headers }),
-          fetch(`${API_URL}/api/admin/dashboard/weekly-sales`, { headers }),
+          fetch(`${API_URL}/api/admin/dashboard/weekly-devis`, { headers }),
           fetch(`${API_URL}/api/admin/dashboard/activity`, { headers }),
         ]);
 
         const statsJson = await statsRes.json();
-        const weeklyJson = await weeklyRes.json();
+        const weeklyDevisJson = await weeklyDevisRes.json();
         const activityJson = await activityRes.json();
 
         if (statsJson.success) setStats(statsJson.data);
-        if (weeklyJson.success) setWeekly(weeklyJson.data);
+        if (weeklyDevisJson.success) setWeeklyDevis(weeklyDevisJson.data);
         if (activityJson.success) setActivity(activityJson.data);
       } catch (err) {
         console.error("Erreur chargement dashboard:", err);
@@ -88,8 +88,8 @@ export default function Dashboard() {
     fetchAll();
   }, []);
 
-  const maxV = weekly.length > 0 ? Math.max(...weekly.map((w) => w.v), 1) : 1;
-  const weekTotal = weekly.reduce((sum, w) => sum + w.v, 0);
+  const maxV = weeklyDevis.length > 0 ? Math.max(...weeklyDevis.map((w) => w.v), 1) : 1;
+  const weekDevisTotal = weeklyDevis.reduce((sum, w) => sum + w.v, 0);
 
   const statCards = stats ? [
     {
@@ -174,17 +174,17 @@ export default function Dashboard() {
             border: "1px solid rgba(255,255,255,0.1)",
           }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>
-              {loading ? "…" : `${weekTotal.toLocaleString("fr-FR")} MAD`}
+              {loading ? "…" : `${weekDevisTotal.toLocaleString("fr-FR")} devis`}
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
-              Total facturé sur 7 jours
+              Devis générés sur 7 jours
             </div>
-            {!loading && weekly.length > 0 && (
+            {!loading && weeklyDevis.length > 0 && (
               <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 40, marginTop: 14 }}>
-                {weekly.map((w) => (
+                {weeklyDevis.map((w) => (
                   <div
                     key={w.d}
-                    title={`${w.d} : ${w.v.toLocaleString("fr-FR")} MAD`}
+                    title={`${w.d} : ${w.v} devis`}
                     style={{
                       flex: 1,
                       height: `${(w.v / maxV) * 100}%`,
@@ -273,18 +273,19 @@ export default function Dashboard() {
             <div className="gl-card gl-card-pad" style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
               <div className="gl-card-head" style={{ flexShrink: 0 }}>
                 <div>
-                  <h3>Ventes de la semaine</h3>
-                  <div className="gl-card-sub">Total des commandes facturées, par jour</div>
+                  <h3>Devis générés cette semaine</h3>
+                  <div className="gl-card-sub">Nombre de devis générés, par jour</div>
                 </div>
-                <span className="gl-spec-tag">REF · GL-SALES-W25</span>
+                <span className="gl-spec-tag">REF · GL-DEVIS-W25</span>
               </div>
               {loading ? (
                 <div className="gl-empty"><h4>Chargement…</h4></div>
               ) : (
                 <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "flex-end", gap: 14, padding: "10px 4px 0" }}>
-                  {weekly.map((w) => (
+                  {weeklyDevis.map((w) => (
                     <div key={w.d} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
                       <div
+                        title={`${w.d} : ${w.v} devis`}
                         style={{
                           width: "100%",
                           maxWidth: 34,

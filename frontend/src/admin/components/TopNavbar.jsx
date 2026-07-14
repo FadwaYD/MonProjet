@@ -96,7 +96,7 @@ export default function TopNavbar() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setOpenMenu(null);
-    navigate("/login");
+    navigate("/");
   };
 
   useEffect(() => {
