@@ -63,7 +63,117 @@ function Navbar() {
 
   return (
     <nav style={styles.navbar}>
-      <div style={styles.logo}>🔬 Grand Laboratoire</div>
+      {/* Animations */}
+      <style>{`
+        @keyframes dropdownIn {
+          from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes badgePop {
+          0% { transform: scale(0); }
+          60% { transform: scale(1.25); }
+          100% { transform: scale(1); }
+        }
+        @keyframes cartItemIn {
+          from { opacity: 0; transform: translateX(8px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes logoBreathe {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.04); }
+        }
+
+        .nav-link {
+          position: relative;
+          transition: color 0.25s ease;
+        }
+        .nav-link::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          bottom: -4px;
+          width: 0%;
+          height: 2px;
+          background: #b3002d;
+          transition: width 0.25s ease;
+        }
+        .nav-link:hover::after,
+        .nav-link.active::after {
+          width: 100%;
+        }
+
+        .logo-anim {
+          transition: transform 0.3s ease;
+          cursor: pointer;
+        }
+        .logo-anim:hover {
+          animation: logoBreathe 1.2s ease-in-out infinite;
+        }
+
+        .cart-trigger-anim {
+          transition: transform 0.2s ease;
+        }
+        .cart-trigger-anim:hover {
+          transform: scale(1.1);
+        }
+        .cart-trigger-anim:active {
+          transform: scale(0.95);
+        }
+
+        .cart-badge-anim {
+          animation: badgePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .dropdown-anim {
+          animation: dropdownIn 0.22s ease-out both;
+          transform-origin: top right;
+        }
+
+        .cart-item-anim {
+          animation: cartItemIn 0.25s ease-out both;
+        }
+
+        .dropdown-item-anim {
+          transition: background 0.2s ease, padding-left 0.2s ease;
+        }
+        .dropdown-item-anim:hover {
+          background: #fdf2f4;
+          padding-left: 22px;
+        }
+
+        .qty-btn-anim {
+          transition: background 0.2s ease, transform 0.15s ease;
+        }
+        .qty-btn-anim:hover:not(:disabled) {
+          background: #eef1f5;
+          transform: translateY(-1px);
+        }
+
+        .trash-btn-anim {
+          transition: transform 0.2s ease, color 0.2s ease;
+        }
+        .trash-btn-anim:hover {
+          transform: scale(1.15);
+          color: #b91c1c;
+        }
+
+        .devis-btn-anim {
+          transition: background 0.25s ease, transform 0.15s ease;
+        }
+        .devis-btn-anim:hover {
+          background: #6f1528;
+          transform: translateY(-2px);
+        }
+
+        .profile-trigger-anim {
+          transition: background 0.2s ease;
+        }
+        .profile-trigger-anim:hover {
+          background: #f8fafc;
+        }
+      `}</style>
+
+      <div style={styles.logo} className="logo-anim">🔬 Grand Laboratoire</div>
 
       <div style={styles.navLinks}>
         {["Accueil", "About", "Produits", "Services", "Contact"].map(
@@ -75,6 +185,7 @@ function Navbar() {
                   ? "/"
                   : `/${item.toLowerCase().replace(" ", "")}`
               }
+              className="nav-link"
               style={{
                 ...styles.link,
                 color: hovered === item ? "#b3002d" : "#333",
@@ -93,16 +204,17 @@ function Navbar() {
         <div style={styles.cartContainer} ref={cartRef}>
           <div
             style={styles.cartTrigger}
+            className="cart-trigger-anim"
             onClick={() => setPanierOuvert((prev) => !prev)}
           >
             <FaShoppingCart size={22} color="#b3002d" />
             {nbArticlesPanier > 0 && (
-              <span style={styles.cartBadge}>{nbArticlesPanier}</span>
+              <span style={styles.cartBadge} className="cart-badge-anim">{nbArticlesPanier}</span>
             )}
           </div>
 
           {panierOuvert && (
-            <div style={styles.cartDropdown}>
+            <div style={styles.cartDropdown} className="dropdown-anim">
               <div style={styles.cartHeader}>
                 <strong>Mon Panier ({nbArticlesPanier})</strong>
               </div>
@@ -112,8 +224,12 @@ function Navbar() {
               ) : (
                 <>
                   <div style={styles.cartItems}>
-                    {panier.map((item) => (
-                      <div key={item.id} style={styles.cartItem}>
+                    {panier.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        style={{ ...styles.cartItem, animationDelay: `${idx * 0.05}s` }}
+                        className="cart-item-anim"
+                      >
                         <img
                           src={getImageUrl(item.image)}
                           alt={item.nom}
@@ -124,6 +240,7 @@ function Navbar() {
                           <div style={styles.cartQtyRow}>
                             <button
                               style={styles.cartQtyBtn}
+                              className="qty-btn-anim"
                               onClick={() =>
                                 changerQuantitePanier(item.id, -1)
                               }
@@ -133,6 +250,7 @@ function Navbar() {
                             <span>{item.quantite}</span>
                             <button
                               style={styles.cartQtyBtn}
+                              className="qty-btn-anim"
                               onClick={() =>
                                 changerQuantitePanier(item.id, 1)
                               }
@@ -148,6 +266,7 @@ function Navbar() {
                           </span>
                           <button
                             style={styles.cartTrashBtn}
+                            className="trash-btn-anim"
                             onClick={() => supprimerDuPanier(item.id)}
                           >
                             <FaTrash size={12} />
@@ -166,6 +285,7 @@ function Navbar() {
                     </div>
                     <button
                       style={styles.cartDevisBtn}
+                      className="devis-btn-anim"
                       onClick={() => {
                         setPanierOuvert(false);
                         navigate("/panier");
@@ -185,6 +305,7 @@ function Navbar() {
           <div style={styles.profileContainer} ref={menuRef}>
             <div
               style={styles.profileTrigger}
+              className="profile-trigger-anim"
               onClick={() => setMenuOpen((prev) => !prev)}
             >
               <FaUserCircle size={30} color="#b3002d" />
@@ -194,10 +315,11 @@ function Navbar() {
             </div>
 
             {menuOpen && (
-              <div style={styles.dropdown}>
+              <div style={styles.dropdown} className="dropdown-anim">
                 <Link
                   to="/profil"
                   style={styles.dropdownItem}
+                  className="dropdown-item-anim"
                   onClick={() => setMenuOpen(false)}
                 >
                   <FaUserEdit style={styles.dropdownIcon} />
@@ -206,6 +328,7 @@ function Navbar() {
 
                 <button
                   style={styles.dropdownItemButton}
+                  className="dropdown-item-anim"
                   onClick={handleLogout}
                 >
                   <FaSignOutAlt style={styles.dropdownIcon} />
@@ -216,7 +339,7 @@ function Navbar() {
           </div>
         ) : (
           <>
-            <Link to="/connexion" style={styles.login}>
+            <Link to="/connexion" style={styles.login} className="nav-link">
               Connexion
             </Link>
 
@@ -258,9 +381,9 @@ const styles = {
     boxShadow: "0 2px 20px rgba(0,0,0,0.08)",
     zIndex: 1000,
   },
-  logo: { fontSize: "24px", fontWeight: "700", color: "#8b0000", cursor: "pointer" },
+  logo: { fontSize: "24px", fontWeight: "700", color: "#8b0000" },
   navLinks: { display: "flex", gap: "35px" },
-  link: { textDecoration: "none", fontSize: "16px", fontWeight: "500", transition: "all 0.3s ease" },
+  link: { textDecoration: "none", fontSize: "16px", fontWeight: "500" },
   actions: { display: "flex", alignItems: "center", gap: "20px" },
   login: { textDecoration: "none", color: "#333", fontWeight: "600" },
   btn: {
@@ -281,7 +404,6 @@ const styles = {
     cursor: "pointer",
     padding: "6px 10px",
     borderRadius: "10px",
-    transition: "background 0.2s ease",
   },
   profileName: { fontWeight: "600", color: "#333", fontSize: "15px" },
   dropdown: {
