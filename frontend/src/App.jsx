@@ -8,6 +8,7 @@ import Connexion from "./client/pages/Connexion";
 import Inscription from "./client/pages/Inscription";
 import DetailProduit from "./client/pages/DetailProduit";
 import Panier from "./client/pages/Panier";
+import Profil from "./client/pages/Profil";
 
 import AdminDashboard from "./admin/Dashboard";
 import AdminProducts from "./admin/Products";
@@ -33,6 +34,7 @@ function App() {
         <Route path="/inscription" element={<Inscription />} />
         <Route path="/produit/:id" element={<DetailProduit />} />
         <Route path="/panier" element={<Panier />} />
+        <Route path="/profil" element={<Profil />} />
 
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/produits" element={<AdminProducts />} />

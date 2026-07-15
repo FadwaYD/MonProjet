@@ -1,26 +1,223 @@
-import React from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
+/* ------------------------------------------------------------------ */
+/* Hook : révèle un élément (fade + slide up) quand il entre à l'écran */
+/* ------------------------------------------------------------------ */
+const useReveal = (threshold = 0.15) => {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.unobserve(node);
+        }
+      },
+      { threshold }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [threshold]);
+
+  return [ref, visible];
+};
+
+/* ------------------------------------------------------------------ */
+/* Petit composant wrapper pour appliquer la révélation + un délai     */
+/* ------------------------------------------------------------------ */
+const Reveal = ({ children, delay = 0, style = {}, as: Tag = "div", ...rest }) => {
+  const [ref, visible] = useReveal();
+  return (
+    <Tag
+      ref={ref}
+      className={`reveal ${visible ? "reveal-visible" : ""}`}
+      style={{ transitionDelay: `${delay}ms`, ...style }}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Compteur animé (0 -> valeur cible) quand visible                    */
+/* ------------------------------------------------------------------ */
+const Counter = ({ target, suffix = "", duration = 1400 }) => {
+  const [ref, visible] = useReveal(0.6);
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!visible) return;
+    let start = null;
+    let frame;
+
+    const step = (timestamp) => {
+      if (start === null) start = timestamp;
+      const progress = Math.min((timestamp - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
+      setValue(Math.floor(eased * target));
+      if (progress < 1) frame = requestAnimationFrame(step);
+      else setValue(target);
+    };
+
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [visible, target, duration]);
+
+  return (
+    <span ref={ref} style={styles.counterNumber}>
+      {value}
+      {suffix}
+    </span>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Carrousel équipe                                                    */
+/* ------------------------------------------------------------------ */
+const teamMembers = [
+  { initials: "AF", name: "Dr. Amadou Faye", role: "Directeur Général" },
+  { initials: "AD", name: "Mme Aïcha Diallo", role: "Directrice Commerciale" },
+  { initials: "IN", name: "M. Ibrahim Ndiaye", role: "Responsable Logistique" },
+  { initials: "FS", name: "Dr. Fatou Sow", role: "Responsable Qualité" },
+];
+
+const TeamCarousel = () => {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const total = teamMembers.length;
+
+  const next = useCallback(() => setIndex((i) => (i + 1) % total), [total]);
+  const prev = () => setIndex((i) => (i - 1 + total) % total);
+
+  useEffect(() => {
+    if (paused) return;
+    const id = setInterval(next, 3800);
+    return () => clearInterval(id);
+  }, [paused, next]);
+
+  const touchStartX = useRef(0);
+  const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
+  const handleTouchEnd = (e) => {
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (delta > 50) prev();
+    else if (delta < -50) next();
+  };
+
+  return (
+    <div
+      style={styles.carouselWrapper}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <button
+        style={{ ...styles.carouselArrow, left: 0 }}
+        className="carousel-arrow"
+        onClick={prev}
+        aria-label="Membre précédent"
+      >
+        ‹
+      </button>
+
+      <div style={styles.carouselTrack}>
+        <div
+          style={{
+            ...styles.carouselInner,
+            transform: `translateX(-${index * 100}%)`,
+          }}
+        >
+          {teamMembers.map((m, i) => (
+            <div style={styles.carouselSlide} key={i}>
+              <div style={styles.memberCard} className="member-card">
+                <div style={styles.avatar}>{m.initials}</div>
+                <h4 style={{ margin: "0 0 6px" }}>{m.name}</h4>
+                <p style={{ margin: 0, color: "#777" }}>{m.role}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        style={{ ...styles.carouselArrow, right: 0 }}
+        className="carousel-arrow"
+        onClick={next}
+        aria-label="Membre suivant"
+      >
+        ›
+      </button>
+
+      <div style={styles.dotsRow}>
+        {teamMembers.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setIndex(i)}
+            aria-label={`Aller au membre ${i + 1}`}
+            style={{
+              ...styles.dot,
+              background: i === index ? "#8b0020" : "#d9d9d9",
+              transform: i === index ? "scale(1.25)" : "scale(1)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Page principale                                                     */
+/* ------------------------------------------------------------------ */
 const About = () => {
   return (
     <>
-    <Navbar />
+      <style>{globalCss}</style>
+      <Navbar />
+
       {/* Hero */}
-      <section style={styles.hero}>
-        <div style={styles.badge}>🧪 À propos de nous</div>
-
-        <h1 style={styles.heroTitle}>Grand Laboratoire</h1>
-
-        <p style={styles.heroText}>
+      <section style={styles.hero} className="hero-animated">
+        <div style={styles.heroGlow} />
+        <div style={styles.badge} className="fade-in-badge">
+          🧪 À propos de nous
+        </div>
+        <h1 style={styles.heroTitle} className="fade-in-title">
+          Grand Laboratoire
+        </h1>
+        <p style={styles.heroText} className="fade-in-text">
           Votre partenaire biomédical de référence en Afrique de l'Ouest
           depuis plus de 15 ans.
         </p>
       </section>
 
+      {/* Bandeau statistiques */}
+      <section style={styles.statsBar}>
+        <Reveal style={styles.statItem}>
+          <Counter target={15} suffix="+" />
+          <p style={styles.counterLabel}>Années d'expérience</p>
+        </Reveal>
+        <Reveal delay={120} style={styles.statItem}>
+          <Counter target={450} suffix="+" />
+          <p style={styles.counterLabel}>Clients servis</p>
+        </Reveal>
+        <Reveal delay={240} style={styles.statItem}>
+          <Counter target={2000} suffix="+" />
+          <p style={styles.counterLabel}>Produits au catalogue</p>
+        </Reveal>
+      </section>
+
       {/* Histoire */}
       <section style={styles.historySection}>
-        <div style={styles.historyText}>
+        <Reveal style={styles.historyText}>
           <h2 style={styles.sectionTitle}>Notre histoire</h2>
 
           <p>
@@ -38,142 +235,184 @@ const About = () => {
             Aujourd'hui, nous servons plus de 450 clients avec un catalogue de
             plus de 2000 produits.
           </p>
-        </div>
+        </Reveal>
 
-        <div style={styles.imageContainer}>
+        <Reveal delay={150} style={styles.imageContainer}>
           <img
             src="https://images.unsplash.com/photo-1579154204601-01588f351e67?w=1000"
             alt="laboratoire"
             style={styles.image}
+            className="history-img"
           />
 
-          <div style={styles.experienceBox}>
-            <h2>15+</h2>
-            <p>Années d'expérience</p>
+          <div style={styles.experienceBox} className="experience-box">
+            <h2 style={{ margin: 0 }}>15+</h2>
+            <p style={{ margin: 0 }}>Années d'expérience</p>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Mission Vision Valeurs */}
       <section style={styles.cardsContainer}>
-        <div style={styles.card}>
-          <div style={styles.icon}>🎯</div>
-          <h3>Notre mission</h3>
-
-          <p>
-            Fournir aux professionnels de la santé et de la recherche les
-            meilleurs produits biomédicaux avec un service irréprochable.
-          </p>
-        </div>
-
-        <div style={styles.card}>
-          <div style={styles.icon}>🏅</div>
-          <h3>Notre vision</h3>
-
-          <p>
-            Devenir le leader incontesté de la distribution biomédicale en
-            Afrique de l'Ouest.
-          </p>
-        </div>
-
-        <div style={styles.card}>
-          <div style={styles.icon}>👥</div>
-          <h3>Nos valeurs</h3>
-
-          <p>
-            Qualité, intégrité, réactivité et innovation guident chacune de nos
-            actions.
-          </p>
-        </div>
+        {[
+          { icon: "🎯", title: "Notre mission", text: "Fournir aux professionnels de la santé et de la recherche les meilleurs produits biomédicaux avec un service irréprochable." },
+          { icon: "🏅", title: "Notre vision", text: "Devenir le leader incontesté de la distribution biomédicale en Afrique de l'Ouest." },
+          { icon: "👥", title: "Nos valeurs", text: "Qualité, intégrité, réactivité et innovation guident chacune de nos actions." },
+        ].map((c, i) => (
+          <Reveal key={i} delay={i * 130} style={styles.card} className="card">
+            <div style={styles.icon} className="card-icon">{c.icon}</div>
+            <h3>{c.title}</h3>
+            <p>{c.text}</p>
+          </Reveal>
+        ))}
       </section>
 
       {/* Engagements */}
       <section style={styles.engagementSection}>
-        <h2 style={styles.sectionTitle}>Nos engagements</h2>
-
-        <p style={styles.subtitle}>
+        <Reveal as="h2" style={styles.sectionTitle}>
+          Nos engagements
+        </Reveal>
+        <Reveal delay={80} as="p" style={styles.subtitle}>
           Des valeurs fortes qui définissent notre identité.
-        </p>
+        </Reveal>
 
         <div style={styles.engagementGrid}>
-          <div style={styles.engagementCard}>
-            <div style={styles.icon}>🛡️</div>
-            <h3>Qualité</h3>
-            <p>Produits certifiés et conformes aux normes.</p>
-          </div>
-
-          <div style={styles.engagementCard}>
-            <div style={styles.icon}>❤️</div>
-            <h3>Intégrité</h3>
-            <p>Transparence totale dans nos relations.</p>
-          </div>
-
-          <div style={styles.engagementCard}>
-            <div style={styles.icon}>⚡</div>
-            <h3>Réactivité</h3>
-            <p>Livraison rapide et assistance continue.</p>
-          </div>
-
-          <div style={styles.engagementCard}>
-            <div style={styles.icon}>🌐</div>
-            <h3>Innovation</h3>
-            <p>Veille technologique permanente.</p>
-          </div>
+          {[
+            { icon: "🛡️", title: "Qualité", text: "Produits certifiés et conformes aux normes." },
+            { icon: "❤️", title: "Intégrité", text: "Transparence totale dans nos relations." },
+            { icon: "⚡", title: "Réactivité", text: "Livraison rapide et assistance continue." },
+            { icon: "🌐", title: "Innovation", text: "Veille technologique permanente." },
+          ].map((e, i) => (
+            <Reveal key={i} delay={i * 100} style={styles.engagementCard} className="engagement-card">
+              <div style={styles.icon} className="card-icon">{e.icon}</div>
+              <h3>{e.title}</h3>
+              <p>{e.text}</p>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* Equipe */}
+      {/* Equipe - carrousel */}
       <section style={styles.teamSection}>
-        <h2 style={styles.sectionTitle}>Notre équipe</h2>
-
-        <p style={styles.subtitle}>
+        <Reveal as="h2" style={styles.sectionTitle}>
+          Notre équipe
+        </Reveal>
+        <Reveal delay={80} as="p" style={styles.subtitle}>
           Des professionnels passionnés à votre service.
-        </p>
+        </Reveal>
 
-        <div style={styles.teamGrid}>
-          <div style={styles.memberCard}>
-            <div style={styles.avatar}>AF</div>
-            <h4>Dr. Amadou Faye</h4>
-            <p>Directeur Général</p>
-          </div>
-
-          <div style={styles.memberCard}>
-            <div style={styles.avatar}>AD</div>
-            <h4>Mme Aïcha Diallo</h4>
-            <p>Directrice Commerciale</p>
-          </div>
-
-          <div style={styles.memberCard}>
-            <div style={styles.avatar}>IN</div>
-            <h4>M. Ibrahim Ndiaye</h4>
-            <p>Responsable Logistique</p>
-          </div>
-
-          <div style={styles.memberCard}>
-            <div style={styles.avatar}>FS</div>
-            <h4>Dr. Fatou Sow</h4>
-            <p>Responsable Qualité</p>
-          </div>
-        </div>
+        <Reveal delay={160}>
+          <TeamCarousel />
+        </Reveal>
       </section>
 
       {/* Certifications */}
-      <section style={styles.certificationSection}>
-        <h2 style={{ marginBottom: "40px" }}>
-          Certifications & Qualité
-        </h2>
+      {/* <section style={styles.certificationSection}>
+        <Reveal as="h2" style={{ marginBottom: "40px" }}>
+          Certifications &amp; Qualité
+        </Reveal>
 
         <div style={styles.certificationGrid}>
-          <div style={styles.certCard}>ISO 9001:2015</div>
-          <div style={styles.certCard}>ISO 13485</div>
-          <div style={styles.certCard}>Certification CE</div>
-          <div style={styles.certCard}>BPF</div>
+          {["ISO 9001:2015", "ISO 13485", "Certification CE", "BPF"].map((c, i) => (
+            <Reveal key={i} delay={i * 100} style={styles.certCard} className="cert-card">
+              {c}
+            </Reveal>
+          ))}
         </div>
-      </section>
+      </section> */}
+
       <Footer />
     </>
   );
 };
+
+/* ------------------------------------------------------------------ */
+/* CSS global : keyframes, hover, carrousel, responsive, reduced-motion*/
+/* ------------------------------------------------------------------ */
+const globalCss = `
+  @keyframes floatGlow {
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+    50% { transform: translate(20px, -15px) scale(1.08); opacity: 0.8; }
+  }
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-animated { position: relative; overflow: hidden; }
+  .fade-in-badge { animation: fadeSlideDown 0.7s ease both; }
+  .fade-in-title { animation: fadeSlideDown 0.8s ease 0.15s both; }
+  .fade-in-text { animation: fadeSlideDown 0.8s ease 0.3s both; }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(36px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .card, .engagement-card, .member-card, .cert-card {
+    transition: transform 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
+  }
+  .card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(139,0,32,0.15);
+  }
+  .engagement-card:hover {
+    transform: translateY(-6px);
+  }
+  .card-icon {
+    transition: transform 0.35s ease;
+    display: inline-block;
+  }
+  .card:hover .card-icon, .engagement-card:hover .card-icon {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  .member-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 28px rgba(0,0,0,0.12);
+  }
+  .cert-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255,255,255,0.08);
+  }
+  .history-img {
+    transition: transform 0.6s ease;
+  }
+  .history-img:hover {
+    transform: scale(1.03);
+  }
+  .experience-box {
+    transition: transform 0.35s ease;
+  }
+  .experience-box:hover {
+    transform: translateY(-4px);
+  }
+
+  .carousel-arrow {
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .carousel-arrow:hover {
+    background: #8b0020;
+    color: #fff;
+    transform: translateY(-50%) scale(1.08);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, .fade-in-badge, .fade-in-title, .fade-in-text,
+    .card, .engagement-card, .member-card, .cert-card,
+    .history-img, .experience-box, .carousel-arrow {
+      animation: none !important;
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+`;
 
 const styles = {
   hero: {
@@ -183,23 +422,63 @@ const styles = {
     padding: "90px 20px",
   },
 
+  heroGlow: {
+    position: "absolute",
+    top: "-60px",
+    right: "-60px",
+    width: "260px",
+    height: "260px",
+    borderRadius: "50%",
+    background: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 70%)",
+    animation: "floatGlow 7s ease-in-out infinite",
+    pointerEvents: "none",
+  },
+
   badge: {
     display: "inline-block",
     background: "#8e3346",
     padding: "10px 20px",
     borderRadius: "20px",
     marginBottom: "20px",
+    position: "relative",
   },
 
   heroTitle: {
     fontSize: "60px",
     marginBottom: "20px",
+    position: "relative",
   },
 
   heroText: {
     fontSize: "22px",
     maxWidth: "700px",
     margin: "auto",
+    position: "relative",
+  },
+
+  statsBar: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "70px",
+    flexWrap: "wrap",
+    padding: "50px 20px",
+    background: "#fff",
+  },
+
+  statItem: {
+    textAlign: "center",
+  },
+
+  counterNumber: {
+    fontSize: "42px",
+    fontWeight: "800",
+    color: "#8b0020",
+  },
+
+  counterLabel: {
+    margin: "6px 0 0",
+    color: "#666",
+    fontSize: "15px",
   },
 
   historySection: {
@@ -226,6 +505,7 @@ const styles = {
   image: {
     width: "100%",
     borderRadius: "20px",
+    display: "block",
   },
 
   experienceBox: {
@@ -282,6 +562,7 @@ const styles = {
 
   engagementCard: {
     padding: "25px",
+    borderRadius: "12px",
   },
 
   teamSection: {
@@ -290,11 +571,26 @@ const styles = {
     textAlign: "center",
   },
 
-  teamGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-    gap: "20px",
-    marginTop: "40px",
+  /* Carrousel */
+  carouselWrapper: {
+    position: "relative",
+    maxWidth: "420px",
+    margin: "40px auto 0",
+  },
+
+  carouselTrack: {
+    overflow: "hidden",
+    borderRadius: "10px",
+  },
+
+  carouselInner: {
+    display: "flex",
+    transition: "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)",
+  },
+
+  carouselSlide: {
+    flex: "0 0 100%",
+    padding: "4px",
   },
 
   memberCard: {
@@ -315,6 +611,38 @@ const styles = {
     alignItems: "center",
     margin: "0 auto 15px",
     fontWeight: "bold",
+  },
+
+  carouselArrow: {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "white",
+    border: "1px solid #eee",
+    color: "#8b0020",
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    fontSize: "22px",
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+    zIndex: 2,
+  },
+
+  dotsRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "8px",
+    marginTop: "18px",
+  },
+
+  dot: {
+    width: "9px",
+    height: "9px",
+    borderRadius: "50%",
+    border: "none",
+    cursor: "pointer",
+    transition: "transform 0.25s ease, background 0.25s ease",
   },
 
   certificationSection: {

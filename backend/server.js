@@ -15,6 +15,9 @@ app.use(express.json());
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+const utilisateursRoutes = require("./routes/utilisateurs");
+app.use("/api/utilisateurs", utilisateursRoutes);
+
 // ─── Routes Auth ──────────────────────────────────────────────────────────────
 app.use("/api/auth", require("./routes/authRoutes"));
 const adminSettingsRoutes = require("./routes/admin/adminSettingsRoutes");
