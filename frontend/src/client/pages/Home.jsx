@@ -377,11 +377,6 @@ const GALLERY_PHOTOS = [
     alt: "Rangée de tubes à essai remplis de réactifs colorés",
     span: "wide",
   },
-  {
-    src: "https://images.unsplash.com/photo-1748263582756-082fe4adaa5b?auto=format&fit=crop&w=700&q=80",
-    alt: "Tubes Eppendorf rangés dans un portoir de laboratoire",
-    span: "normal",
-  },
 ];
 
 function Gallery() {

@@ -43,6 +43,8 @@ app.use("/api/commandes", require("./routes/admin/commandeRoutes"));
 app.use("/api/produits",  require("./routes/client/produitRoutes"));
 app.use("/api/contacts",  require("./routes/client/contactRoutes"));
 
+const clientSettingsRoutes = require("./routes/client/clientSettingsRoutes");
+app.use("/api/client", clientSettingsRoutes);
 
 const commandeRoutes = require("./routes/client/commandeRoutes");
 app.use("/api/commande", commandeRoutes);   // <-- sans "s"
