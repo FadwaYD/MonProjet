@@ -473,7 +473,7 @@ function Produits() {
       </section>
 
       {/* CARROUSEL PRODUITS VEDETTES */}
-      {!loading && !error && produitsVedettes.length > 0 && (
+      {/* {!loading && !error && produitsVedettes.length > 0 && (
         <section style={styles.carouselSection}>
           <div style={styles.container}>
             <div
@@ -556,7 +556,7 @@ function Produits() {
             </div>
           </div>
         </section>
-      )}
+      )} */}
 
       {/* FILTRE */}
       <section style={styles.filterSection}>

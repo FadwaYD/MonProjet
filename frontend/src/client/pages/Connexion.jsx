@@ -79,8 +79,7 @@ function Connexion() {
 
   return (
     <>
-      <Navbar />
-
+      
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.iconBox}>
