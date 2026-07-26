@@ -73,36 +73,49 @@ exports.getStats = async (req, res) => {
   }
 };
 
-// GET /api/admin/dashboard/weekly-devis
-// Un "devis généré" = une commande confirmée (statut = 'Confirmée'), comptée par jour.
-exports.getWeeklyDevis = async (req, res) => {
+// GET /api/admin/dashboard/monthly-orders
+// Commandes des 6 derniers mois, réparties par statut (Confirmée / En attente / Annulée).
+exports.getMonthlyOrders = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT DATE(date_commande) AS jour, COUNT(*) AS total
+      `SELECT
+         DATE_FORMAT(date_commande, '%Y-%m') AS mois,
+         SUM(CASE WHEN statut = 'Confirmée'  THEN 1 ELSE 0 END) AS confirmee,
+         SUM(CASE WHEN statut = 'En attente' THEN 1 ELSE 0 END) AS enAttente,
+         SUM(CASE WHEN statut = 'Annulée'    THEN 1 ELSE 0 END) AS annulee
        FROM commandes
-       WHERE date_commande >= CURDATE() - INTERVAL 6 DAY AND statut = 'Confirmée'
-       GROUP BY DATE(date_commande)
-       ORDER BY jour ASC`
+       WHERE date_commande >= DATE_FORMAT(CURDATE() - INTERVAL 5 MONTH, '%Y-%m-01')
+       GROUP BY DATE_FORMAT(date_commande, '%Y-%m')
+       ORDER BY mois ASC`
     );
 
-    // Génère les 7 derniers jours (avec 0 pour les jours sans devis)
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
+    // Génère les 6 derniers mois (avec 0 pour les mois sans commande)
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
       const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString("fr-FR", { weekday: "short" });
-      const found = rows.find((r) => r.jour.toISOString().slice(0, 10) === key);
-      days.push({
-        d: label.charAt(0).toUpperCase() + label.slice(1).replace(".", ""),
-        v: found ? Number(found.total) : 0,
+      d.setDate(1); // évite les décalages de fin de mois (ex: 31 -> mois suivant)
+      d.setMonth(d.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("fr-FR", { month: "short" });
+      const found = rows.find((r) => r.mois === key);
+
+      const confirmee = found ? Number(found.confirmee) : 0;
+      const enAttente = found ? Number(found.enAttente) : 0;
+      const annulee = found ? Number(found.annulee) : 0;
+
+      months.push({
+        m: label.charAt(0).toUpperCase() + label.slice(1).replace(".", ""),
+        confirmee,
+        enAttente,
+        annulee,
+        total: confirmee + enAttente + annulee,
       });
     }
 
-    res.status(200).json({ success: true, data: days });
+    res.status(200).json({ success: true, data: months });
   } catch (err) {
-    console.error("Erreur getWeeklyDevis:", err);
-    res.status(500).json({ success: false, message: "Erreur serveur lors du calcul des devis hebdomadaires." });
+    console.error("Erreur getMonthlyOrders:", err);
+    res.status(500).json({ success: false, message: "Erreur serveur lors du calcul des commandes mensuelles." });
   }
 };
 

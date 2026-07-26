@@ -17,9 +17,12 @@ exports.login = (req, res) => {
         });
     }
 
-    const sql = "SELECT * FROM utilisateurs WHERE email = ?";
+    // trim + lowercase pour éviter les faux négatifs dus aux espaces ou à la casse
+    const cleanEmail = email.trim().toLowerCase();
 
-    db.query(sql, [email], async (err, result) => {
+    const sql = "SELECT * FROM utilisateurs WHERE LOWER(email) = ?";
+
+    db.query(sql, [cleanEmail], async (err, result) => {
 
         if (err) {
             console.error("Erreur SQL (login):", err);
@@ -30,6 +33,7 @@ exports.login = (req, res) => {
         }
 
         if (result.length === 0) {
+            console.log("Login échoué: aucun utilisateur trouvé pour", cleanEmail);
             return res.status(401).json({
                 success: false,
                 message: "Email incorrect"
@@ -43,6 +47,9 @@ exports.login = (req, res) => {
             user.mot_de_passe
         );
 
+        // Debug temporaire — à retirer une fois le problème identifié
+        console.log("Login debug -> email:", user.email, "| hash:", user.mot_de_passe, "| isMatch:", isMatch);
+
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
@@ -50,7 +57,8 @@ exports.login = (req, res) => {
             });
         }
 
-        if (user.statut == 0) {
+        // statut: 1 = en attente de validation, 0 = approuvé (cf. register)
+        if (user.statut == 1) {
             return res.status(403).json({
                 success: false,
                 message: "Compte non validé"
@@ -114,9 +122,11 @@ exports.register = (req, res) => {
         });
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+
     db.query(
-        "SELECT * FROM utilisateurs WHERE email=?",
-        [email],
+        "SELECT * FROM utilisateurs WHERE LOWER(email) = ?",
+        [cleanEmail],
         async (err, result) => {
 
             if (err) {
@@ -170,7 +180,7 @@ exports.register = (req, res) => {
                     prenom,
                     nomLabo,
                     ville,
-                    email,
+                    cleanEmail,
                     telephone,
                     hash,
                     "Client",
@@ -179,7 +189,6 @@ exports.register = (req, res) => {
                 (err) => {
 
                     if (err) {
-                        // Affiche l'erreur SQL exacte dans la console du serveur
                         console.error("Erreur SQL (register - insert):", err);
                         return res.status(500).json({
                             success: false,

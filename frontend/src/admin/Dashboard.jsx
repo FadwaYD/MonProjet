@@ -16,12 +16,19 @@ const ACTIVITY_ICONS = {
   message: IconMail,
 };
 
+// Couleurs des statuts de commande utilisées dans le graphe mensuel
+const STATUS_COLORS = {
+  confirmee: "linear-gradient(180deg, var(--gl-bordeaux-500), var(--gl-bordeaux-700))",
+  enAttente: "#f0b429",
+  annulee: "#ef4444",
+};
+
 // Contenu du guide d'utilisation de l'espace admin (Grand Laboratoire)
 const guideSections = [
   {
     icon: IconChart,
     title: "Tableau de bord",
-    text: "Vue d'ensemble de l'activité : ventes du mois, messages non traités, commandes en cours et nouveaux clients. Le graphique affiche le nombre de devis générés par jour sur les 7 derniers jours.",
+    text: "Vue d'ensemble de l'activité : ventes du mois, messages non traités, commandes en cours et nouveaux clients. Le graphique affiche les commandes par mois (Confirmées / En attente / Annulées) sur les 6 derniers mois.",
   },
   {
     icon: IconBox,
@@ -53,7 +60,7 @@ const guideSections = [
 export default function Dashboard() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  const [weeklyDevis, setWeeklyDevis] = useState([]);
+  const [monthlyOrders, setMonthlyOrders] = useState([]);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -65,18 +72,18 @@ export default function Dashboard() {
       try {
         const headers = { Authorization: `Bearer ${localStorage.getItem("token") || ""}` };
 
-        const [statsRes, weeklyDevisRes, activityRes] = await Promise.all([
+        const [statsRes, monthlyOrdersRes, activityRes] = await Promise.all([
           fetch(`${API_URL}/api/admin/dashboard/stats`, { headers }),
-          fetch(`${API_URL}/api/admin/dashboard/weekly-devis`, { headers }),
+          fetch(`${API_URL}/api/admin/dashboard/monthly-orders`, { headers }),
           fetch(`${API_URL}/api/admin/dashboard/activity`, { headers }),
         ]);
 
         const statsJson = await statsRes.json();
-        const weeklyDevisJson = await weeklyDevisRes.json();
+        const monthlyOrdersJson = await monthlyOrdersRes.json();
         const activityJson = await activityRes.json();
 
         if (statsJson.success) setStats(statsJson.data);
-        if (weeklyDevisJson.success) setWeeklyDevis(weeklyDevisJson.data);
+        if (monthlyOrdersJson.success) setMonthlyOrders(monthlyOrdersJson.data);
         if (activityJson.success) setActivity(activityJson.data);
       } catch (err) {
         console.error("Erreur chargement dashboard:", err);
@@ -88,8 +95,8 @@ export default function Dashboard() {
     fetchAll();
   }, []);
 
-  const maxV = weeklyDevis.length > 0 ? Math.max(...weeklyDevis.map((w) => w.v), 1) : 1;
-  const weekDevisTotal = weeklyDevis.reduce((sum, w) => sum + w.v, 0);
+  const maxV = monthlyOrders.length > 0 ? Math.max(...monthlyOrders.map((m) => m.total), 1) : 1;
+  const monthsOrdersTotal = monthlyOrders.reduce((sum, m) => sum + m.total, 0);
 
   const statCards = stats ? [
     {
@@ -161,33 +168,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Mini résumé de la semaine */}
+        {/* Mini résumé des 6 derniers mois */}
         <div>
           <div style={{
             fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
             color: "rgba(255,255,255,0.55)", marginBottom: 12,
           }}>
-            Cette semaine
+            6 derniers mois
           </div>
           <div style={{
             background: "rgba(255,255,255,0.08)", borderRadius: 12, padding: "14px 16px",
             border: "1px solid rgba(255,255,255,0.1)",
           }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>
-              {loading ? "…" : `${weekDevisTotal.toLocaleString("fr-FR")} devis`}
+              {loading ? "…" : `${monthsOrdersTotal.toLocaleString("fr-FR")} commandes`}
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
-              Devis générés sur 7 jours
+              Toutes commandes, tous statuts
             </div>
-            {!loading && weeklyDevis.length > 0 && (
+            {!loading && monthlyOrders.length > 0 && (
               <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 40, marginTop: 14 }}>
-                {weeklyDevis.map((w) => (
+                {monthlyOrders.map((mo) => (
                   <div
-                    key={w.d}
-                    title={`${w.d} : ${w.v} devis`}
+                    key={mo.m}
+                    title={`${mo.m} : ${mo.total} commandes`}
                     style={{
                       flex: 1,
-                      height: `${(w.v / maxV) * 100}%`,
+                      height: `${(mo.total / maxV) * 100}%`,
                       minHeight: 3,
                       borderRadius: 2,
                       background: "rgba(255,255,255,0.55)",
@@ -273,32 +280,56 @@ export default function Dashboard() {
             <div className="gl-card gl-card-pad" style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
               <div className="gl-card-head" style={{ flexShrink: 0 }}>
                 <div>
-                  <h3>Devis générés cette semaine</h3>
-                  <div className="gl-card-sub">Nombre de devis générés, par jour</div>
+                  <h3>Commandes par mois</h3>
+                  <div className="gl-card-sub">Confirmées / En attente / Annulées — 6 derniers mois</div>
                 </div>
-                <span className="gl-spec-tag">REF · GL-DEVIS-W25</span>
+                <span className="gl-spec-tag">REF · GL-CMD-M6</span>
               </div>
+
+              {/* Légende des statuts */}
+              {!loading && (
+                <div style={{ display: "flex", gap: 16, padding: "6px 4px 0", flexShrink: 0 }}>
+                  <LegendItem color={STATUS_COLORS.confirmee} label="Confirmée" />
+                  <LegendItem color={STATUS_COLORS.enAttente} label="En attente" />
+                  <LegendItem color={STATUS_COLORS.annulee} label="Annulée" />
+                </div>
+              )}
+
               {loading ? (
                 <div className="gl-empty"><h4>Chargement…</h4></div>
               ) : (
                 <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "flex-end", gap: 14, padding: "10px 4px 0" }}>
-                  {weeklyDevis.map((w) => (
-                    <div key={w.d} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
-                      <div
-                        title={`${w.d} : ${w.v} devis`}
-                        style={{
-                          width: "100%",
-                          maxWidth: 34,
-                          height: `${(w.v / maxV) * 85 + 6}%`,
-                          borderRadius: "8px 8px 3px 3px",
-                          background: w.v === maxV && w.v > 0
-                            ? "linear-gradient(180deg, var(--gl-bordeaux-500), var(--gl-bordeaux-700))"
-                            : "var(--gl-gray-200)",
-                        }}
-                      />
-                      <span style={{ fontSize: 11.5, color: "var(--gl-gray-600)", fontWeight: 600, flexShrink: 0 }}>{w.d}</span>
-                    </div>
-                  ))}
+                  {monthlyOrders.map((mo) => {
+                    const barHeightPct = mo.total > 0 ? (mo.total / maxV) * 85 + 6 : 0;
+                    return (
+                      <div key={mo.m} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+                        <div
+                          title={`${mo.m} : ${mo.total} commande(s) — Confirmées: ${mo.confirmee}, En attente: ${mo.enAttente}, Annulées: ${mo.annulee}`}
+                          style={{
+                            width: "100%",
+                            maxWidth: 34,
+                            height: `${barHeightPct}%`,
+                            borderRadius: "8px 8px 3px 3px",
+                            display: "flex",
+                            flexDirection: "column-reverse",
+                            overflow: "hidden",
+                            background: "var(--gl-gray-200)",
+                          }}
+                        >
+                          {mo.confirmee > 0 && (
+                            <div style={{ height: `${(mo.confirmee / mo.total) * 100}%`, background: STATUS_COLORS.confirmee }} />
+                          )}
+                          {mo.enAttente > 0 && (
+                            <div style={{ height: `${(mo.enAttente / mo.total) * 100}%`, background: STATUS_COLORS.enAttente }} />
+                          )}
+                          {mo.annulee > 0 && (
+                            <div style={{ height: `${(mo.annulee / mo.total) * 100}%`, background: STATUS_COLORS.annulee }} />
+                          )}
+                        </div>
+                        <span style={{ fontSize: 11.5, color: "var(--gl-gray-600)", fontWeight: 600, flexShrink: 0 }}>{mo.m}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -391,6 +422,15 @@ function SidebarStat({ icon: Icon, label, value, tone }) {
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>{label}</div>
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{value}</div>
+    </div>
+  );
+}
+
+function LegendItem({ color, label }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 3, background: color, display: "inline-block" }} />
+      <span style={{ fontSize: 11.5, color: "var(--gl-gray-600)", fontWeight: 600 }}>{label}</span>
     </div>
   );
 }
