@@ -99,7 +99,7 @@ function Inscription() {
 
   return (
     <>
-      <Navbar />
+
 
       <div style={styles.page}>
         <div style={styles.card}>

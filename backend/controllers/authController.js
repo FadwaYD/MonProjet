@@ -57,8 +57,11 @@ exports.login = (req, res) => {
             });
         }
 
-        // statut: 1 = en attente de validation, 0 = approuvé (cf. register)
-        if (user.statut == 1) {
+
+        // ── Vérification du statut, uniquement pour les comptes Client ──
+        // statut = 1 -> compte bloqué (en attente de validation)
+        // statut = 0 -> accès autorisé côté client
+        if (user.role === "Client" && user.statut == 1) {
             return res.status(403).json({
                 success: false,
                 message: "Compte non validé"

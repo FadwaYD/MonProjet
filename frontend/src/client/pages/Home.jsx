@@ -24,6 +24,39 @@ function getImageUrl(image) {
   return `${API_BASE_URL}/uploads/${image}`;
 }
 
+// Sélectionne des produits en essayant de couvrir un maximum
+// de statuts différents (Réactif / Consommable / Matériel),
+// façon "un peu de chaque tiroir" avant de compléter.
+function getFeaturedProduits(produits, count = 4) {
+  if (!Array.isArray(produits) || produits.length === 0) return [];
+
+  const parStatut = {};
+  produits.forEach((p) => {
+    const key = p.statut || "Autre";
+    if (!parStatut[key]) parStatut[key] = [];
+    parStatut[key].push(p);
+  });
+
+  const statuts = Object.keys(parStatut);
+  const featured = [];
+  let index = 0;
+  let securite = 0;
+  const maxIterations = produits.length * Math.max(statuts.length, 1) + 10;
+
+  while (featured.length < count && featured.length < produits.length) {
+    const statut = statuts[index % statuts.length];
+    const liste = parStatut[statut];
+    if (liste && liste.length > 0) {
+      featured.push(liste.shift());
+    }
+    index++;
+    securite++;
+    if (securite > maxIterations) break; // anti-boucle infinie
+  }
+
+  return featured;
+}
+
 /* ==========================
    REVEAL — apparition au scroll
 ========================== */
@@ -135,28 +168,28 @@ const HERO_SLIDES = [
     src: "https://images.unsplash.com/photo-1631556763178-b96af5e9993e?auto=format&fit=crop&w=1920&q=80",
     alt: "Rack de tubes à essai remplis de réactifs colorés en laboratoire",
     eyebrow: "Réactifs & analyses",
-    title: "Des réactifs préparés avec précision",
+    title: "Des réactifs préparés",
     pan: "center 30%",
   },
   {
     src: "https://images.unsplash.com/photo-1554475901-4538ddfbccc2?auto=format&fit=crop&w=1920&q=80",
     alt: "Technicien tenant des ballons de verrerie de laboratoire",
     eyebrow: "Verrerie professionnelle",
-    title: "Une verrerie choisie pour durer",
+    title: "Une verrerie choisie",
     pan: "center 40%",
   },
   {
     src: "https://images.unsplash.com/photo-1628863353691-0071c8c1874c?auto=format&fit=crop&w=1920&q=80",
     alt: "Ballon d'Erlenmeyer en verre transparent sur paillasse de laboratoire",
     eyebrow: "Instruments de mesure",
-    title: "Du matériel calibré, prêt à l'emploi",
+    title: "Du matériel calibré",
     pan: "center center",
   },
   {
     src: "https://images.unsplash.com/photo-1748263582756-082fe4adaa5b?auto=format&fit=crop&w=1920&q=80",
     alt: "Tubes Eppendorf rangés dans un portoir de laboratoire biomédical",
     eyebrow: "Stocks & disponibilité",
-    title: "Un stock large, livré rapidement",
+    title: "Un stock large",
     pan: "center 35%",
   },
 ];
@@ -344,11 +377,6 @@ const GALLERY_PHOTOS = [
     alt: "Rangée de tubes à essai remplis de réactifs colorés",
     span: "wide",
   },
-  {
-    src: "https://images.unsplash.com/photo-1748263582756-082fe4adaa5b?auto=format&fit=crop&w=700&q=80",
-    alt: "Tubes Eppendorf rangés dans un portoir de laboratoire",
-    span: "normal",
-  },
 ];
 
 function Gallery() {
@@ -426,6 +454,8 @@ function Home() {
         setProduits([]);
       });
   }, []);
+
+  const produitsVedette = getFeaturedProduits(produits, 4);
 
   return (
     <>
@@ -668,7 +698,7 @@ function Home() {
                 <span style={styles.eyebrow}>Catalogue</span>
                 <h2 style={styles.sectionTitle}>Produits en vedette</h2>
                 <p style={styles.sectionSubtitle}>
-                  Nos produits les plus demandés.
+                  Réactifs, consommables et matériel — un aperçu de notre gamme.
                 </p>
               </div>
 
@@ -679,41 +709,52 @@ function Home() {
           </Reveal>
 
           <div style={styles.grid}>
-            {(produits || []).slice(0, 6).map((p, i) => (
-              <Reveal key={p.id} delay={(i % 3) * 100}>
-                <div
-                  className="hoverLift productCard"
-                  style={{ ...styles.productCard, cursor: "pointer" }}
-                  onClick={() => navigate(`/produit/${p.id}`)}
-                >
-                  <div className="hoverImg">
-                    <img
-                      src={getImageUrl(p.image)}
-                      alt={p.nom}
-                      style={styles.image}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = "/placeholder.png";
-                      }}
-                    />
-                  </div>
-
-                  <div style={styles.productBody}>
-                    <span style={styles.brand}>{p.marque}</span>
-                    <h3 style={styles.productTitle}>{p.nom}</h3>
-                    <p style={styles.productDesc}>{p.description}</p>
-
-                    <div style={styles.cardFooter}>
-                      <span style={styles.stock}>
-                        <span className="stockDot" style={styles.stockDot} />
-                        En stock
+            {produitsVedette.map((p, i) => {
+              const statutColor = (STATUT_STYLES[p.statut] || STATUT_STYLES.default).color;
+              return (
+                <Reveal key={p.id} delay={(i % 4) * 100}>
+                  <div
+                    className="hoverLift productCard"
+                    style={{ ...styles.productCard, cursor: "pointer" }}
+                    onClick={() => navigate(`/produit/${p.id}`)}
+                  >
+                    <div className="hoverImg" style={{ position: "relative" }}>
+                      <img
+                        src={getImageUrl(p.image)}
+                        alt={p.nom}
+                        style={styles.image}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "/placeholder.png";
+                        }}
+                      />
+                      <span
+                        style={{
+                          ...styles.statutBadgeFloating,
+                          color: statutColor,
+                        }}
+                      >
+                        {p.statut}
                       </span>
-                      <span style={styles.reference}>Réf: {p.reference}</span>
+                    </div>
+
+                    <div style={styles.productBody}>
+                      <span style={styles.brand}>{p.marque}</span>
+                      <h3 style={styles.productTitle}>{p.nom}</h3>
+                      <p style={styles.productDesc}>{p.description}</p>
+
+                      <div style={styles.cardFooter}>
+                        <span style={styles.stock}>
+                          <span className="stockDot" style={styles.stockDot} />
+                          {p.stock > 0 ? "En stock" : "Rupture"}
+                        </span>
+                        <span style={styles.reference}>Réf: {p.reference}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -753,10 +794,10 @@ function Home() {
       </section>
 
       {/* GALERIE PHOTO */}
-      <Gallery />
+      <Gallery /><br />
 
       {/* CTA */}
-      <section style={styles.cta}>
+      {/* <section style={styles.cta}>
         <div style={styles.ctaOverlay} aria-hidden="true" />
         <div style={{ ...styles.container, position: "relative", zIndex: 2 }}>
           <Reveal>
@@ -773,7 +814,7 @@ function Home() {
             </div>
           </Reveal>
         </div>
-      </section>
+      </section> */}
 
       <Footer />
     </>
@@ -786,6 +827,14 @@ function Home() {
 ========================== */
 const GOLD = "#c8a24d";
 const BORDEAUX_DEEP = "#3d0a10";
+
+// Palette de couleurs par statut produit (Réactif / Consommable / Matériel)
+const STATUT_STYLES = {
+  "Réactif": { color: "#8b0000" },
+  "Consommable": { color: "#a3781f" }, // dérivé du or GOLD, plus lisible sur fond blanc
+  "Matériel": { color: "#2e7d42" },
+  default: { color: "#8b0000" },
+};
 
 const styles = {
   hero: {
@@ -1102,6 +1151,22 @@ const styles = {
   },
 
   image: { width: "100%", height: "200px", objectFit: "cover", display: "block" },
+
+  // Badge de statut flottant sur l'image du produit, façon étiquette d'échantillon
+  statutBadgeFloating: {
+    position: "absolute",
+    top: "12px",
+    left: "12px",
+    background: "rgba(255,255,255,0.94)",
+    padding: "5px 12px",
+    borderRadius: "20px",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    fontFamily: "'IBM Plex Mono', monospace",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+  },
 
   productBody: { padding: "18px" },
 

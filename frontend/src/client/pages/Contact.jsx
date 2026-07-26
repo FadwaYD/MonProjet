@@ -72,7 +72,8 @@ function Contact() {
 
       {/* HERO */}
       <section style={styles.hero}>
-        <h1 style={styles.heroTitle}>Contactez-nous</h1>
+        <br /><br />
+        <h1 style={styles.heroTitle}>Contactez-nous</h1><br />
 
         <p style={styles.heroText}>
           Notre équipe est à votre disposition pour répondre à toutes vos

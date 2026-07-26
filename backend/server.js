@@ -15,6 +15,9 @@ app.use(express.json());
 // ─── Fichiers statiques (uploads images) ─────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+const utilisateursRoutes = require("./routes/utilisateurs");
+app.use("/api/utilisateurs", utilisateursRoutes);
+
 // ─── Routes Auth ──────────────────────────────────────────────────────────────
 app.use("/api/auth", require("./routes/authRoutes"));
 const adminSettingsRoutes = require("./routes/admin/adminSettingsRoutes");
@@ -40,6 +43,8 @@ app.use("/api/commandes", require("./routes/admin/commandeRoutes"));
 app.use("/api/produits",  require("./routes/client/produitRoutes"));
 app.use("/api/contacts",  require("./routes/client/contactRoutes"));
 
+const clientSettingsRoutes = require("./routes/client/clientSettingsRoutes");
+app.use("/api/client", clientSettingsRoutes);
 
 const commandeRoutes = require("./routes/client/commandeRoutes");
 app.use("/api/commande", commandeRoutes);   // <-- sans "s"
